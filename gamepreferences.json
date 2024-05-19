@@ -1,0 +1,135 @@
+{
+    "300": {
+        "name": "Confirm when moving",
+        "needReload": false,
+        "values": {
+            "1": {
+                "name": "Disabled",
+                "cssPref": "fled_pref-confirm-movement-off"
+            },
+            "2": {
+                "name": "Enabled with Timer",
+                "cssPref": "fled_pref-confirm-movement-timer"
+            },
+            "3": {
+                "name": "Enabled",
+                "cssPref": "fled_pref-confirm-movement-always"
+            }
+        },
+        "default": 1
+    },
+    "301": {
+        "name": "Confirm when moving a Warder",
+        "needReload": false,
+        "values": {
+            "1": {
+                "name": "Disabled",
+                "cssPref": "fled_pref-confirm-warder-off"
+            },
+            "2": {
+                "name": "Enabled with Timer",
+                "cssPref": "fled_pref-confirm-warder-timer"
+            },
+            "3": {
+                "name": "Enabled",
+                "cssPref": "fled_pref-confirm-warder-always"
+            }
+        },
+        "default": 1
+    },
+    "302": {
+        "name": "Confirm when adding to Inventory",
+        "needReload": false,
+        "values": {
+            "1": {
+                "name": "Disabled",
+                "cssPref": "fled_pref-confirm-add-off"
+            },
+            "2": {
+                "name": "Enabled with Timer",
+                "cssPref": "fled_pref-confirm-add-timer"
+            },
+            "3": {
+                "name": "Enabled",
+                "cssPref": "fled_pref-confirm-add-always"
+            }
+        },
+        "default": 1
+    },
+    "303": {
+        "name": "Confirm when surrendering a tile",
+        "needReload": false,
+        "values": {
+            "1": {
+                "name": "Disabled",
+                "cssPref": "fled_pref-confirm-surrender-off"
+            },
+            "2": {
+                "name": "Enabled with Timer",
+                "cssPref": "fled_pref-confirm-surrender-timer"
+            },
+            "3": {
+                "name": "Enabled",
+                "cssPref": "fled_pref-confirm-surrender-always"
+            }
+        },
+        "default": 1
+    },
+    "304": {
+        "name": "Confirm when discarding from hand",
+        "needReload": false,
+        "values": {
+            "1": {
+                "name": "Disabled",
+                "cssPref": "fled_pref-confirm-discard-off"
+            },
+            "2": {
+                "name": "Enabled with Timer",
+                "cssPref": "fled_pref-confirm-discard-timer"
+            },
+            "3": {
+                "name": "Enabled",
+                "cssPref": "fled_pref-confirm-discard-always"
+            }
+        },
+        "default": 1
+    },
+    "305": {
+        "name": "Confirm when taking from Governor",
+        "needReload": false,
+        "values": {
+            "1": {
+                "name": "Disabled",
+                "cssPref": "fled_pref-confirm-take-off"
+            },
+            "2": {
+                "name": "Enabled with Timer",
+                "cssPref": "fled_pref-confirm-take-timer"
+            },
+            "3": {
+                "name": "Enabled",
+                "cssPref": "fled_pref-confirm-take-always"
+            }
+        },
+        "default": 1
+    },
+    "306": {
+        "name": "Confirm when escaping",
+        "needReload": false,
+        "values": {
+            "1": {
+                "name": "Disabled",
+                "cssPref": "fled_pref-confirm-surrender-off"
+            },
+            "2": {
+                "name": "Enabled with Timer",
+                "cssPref": "fled_pref-confirm-surrender-timer"
+            },
+            "3": {
+                "name": "Enabled",
+                "cssPref": "fled_pref-confirm-surrender-always"
+            }
+        },
+        "default": 1
+    }
+}

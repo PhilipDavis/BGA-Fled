@@ -1,0 +1,176 @@
+{
+    "table": {
+        "prison_size": {
+            "id": 10,
+            "name": "Size of the prison",
+            "type": "int"
+        },
+        "warder_count": {
+            "id": 11,
+            "name": "Warders in the prison",
+            "type": "int"
+        },
+        "whistles_blown": {
+            "id": 12,
+            "name": "Whistles blown",
+            "type": "int"
+        },
+        "warder_distance": {
+            "id": 13,
+            "name": "Distance travelled by warders",
+            "type": "int"
+        },
+        "chaplain_distance": {
+            "id": 14,
+            "name": "Distance travelled by the Chaplain",
+            "type": "int"
+        },
+        "hound_distance": {
+            "id": 15,
+            "name": "Distance travelled by the Hound",
+            "type": "int"
+        },
+        "specter_distance": {
+            "id": 16,
+            "name": "Distance travelled by the Specter",
+            "type": "int"
+        },
+        "governors_inventory_max": {
+            "id": 17,
+            "name": "Largest Governor's Inventory",
+            "type": "int"
+        },
+        "confiscations": {
+            "id": 18,
+            "name": "Items confiscated",
+            "type": "int"
+        },
+        "items_surrendered": {
+            "id": 19,
+            "name": "Items surrendered to the Governor",
+            "type": "int"
+        },
+        "items_from_governor": {
+            "id": 20,
+            "name": "Items taken from the Governor's Inventory",
+            "type": "int"
+        },
+        "items_from_chaplain": {
+            "id": 21,
+            "name": "Items received from the chaplain",
+            "type": "int"
+        },
+        "escaped": {
+            "id": 22,
+            "name": "Players escaped the prison",
+            "type": "int"
+        },
+        "hard_labour": {
+            "id": 23,
+            "name": "Hard labour was called",
+            "type": "int"
+        }
+    },
+    "player": {
+        "added_to_prison": {
+            "id": 10,
+            "name": "Tiles added to the prison",
+            "type": "int"
+        },
+        "whistles_blown": {
+            "id": 11,
+            "name": "Whistles blown",
+            "type": "int"
+        },
+        "shackled": {
+            "id": 12,
+            "name": "Times shackled",
+            "type": "int"
+        },
+        "shackled_opponents": {
+            "id": 13,
+            "name": "Times shackled opponents",
+            "type": "int"
+        },
+        "solitary": {
+            "id": 14,
+            "name": "Times in solitary confinement",
+            "type": "int"
+        },
+        "contraband_found": {
+            "id": 15,
+            "name": "Contraband items found",
+            "type": "int"
+        },
+        "tools_acquired": {
+            "id": 16,
+            "name": "Tools acquired",
+            "type": "int"
+        },
+        "shamrocks_acquired": {
+            "id": 17,
+            "name": "Shamrocks acquired",
+            "type": "int"
+        },
+        "shamrocks_played": {
+            "id": 18,
+            "name": "Shamrocks played",
+            "type": "int"
+        },
+        "tools_used_single": {
+            "id": 19,
+            "name": "Single tools used",
+            "type": "int"
+        },
+        "tools_used_double": {
+            "id": 20,
+            "name": "Double tools used",
+            "type": "int"
+        },
+        "escaped": {
+            "id": 21,
+            "name": "Escaped the prison",
+            "type": "int"
+        },
+        "opponent_escaped": {
+            "id": 22,
+            "name": "Opponents escaped the prison",
+            "type": "int"
+        },
+        "traversed_window": {
+            "id": 23,
+            "name": "Windows traversed",
+            "type": "int"
+        },
+        "traversed_door": {
+            "id": 24,
+            "name": "Doors traversed",
+            "type": "int"
+        },
+        "traversed_archway": {
+            "id": 25,
+            "name": "Archways traversed",
+            "type": "int"
+        },
+        "traversed_tunnels": {
+            "id": 26,
+            "name": "Tunnels traversed",
+            "type": "int"
+        },
+        "distance_traveled": {
+            "id": 27,
+            "name": "Total distance traveled",
+            "type": "int"
+        },
+        "items_surrendered": {
+            "id": 28,
+            "name": "Items surrendered to the Governor",
+            "type": "int"
+        },
+        "items_from_governor": {
+            "id": 29,
+            "name": "Items taken from the Governor's Inventory",
+            "type": "int"
+        }
+    }
+}

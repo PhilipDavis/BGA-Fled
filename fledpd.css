@@ -1,0 +1,1286 @@
+/**
+ *------
+ * BGA framework: Gregory Isabelli & Emmanuel Colin & BoardGameArena
+ * Fled implementation : © Copyright 2024, Philip Davis (mrphilipadavis AT gmail)
+ *
+ * This code has been produced on the BGA studio platform for use on http://boardgamearena.com.
+ * See http://en.boardgamearena.com/#!doc/Studio for more information.
+ * -----
+ */
+
+ #game_play_area {
+    container-type: inline-size;
+ }
+
+ #fled_body {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    flex-direction: row;
+}
+
+/* Put the board and player areas side-by-side when there is a lot of room */
+@container (min-width: 151em) {
+    #fled_surface {
+        display: grid;
+        width: 151em !important;
+        gap: 1em;
+        grid-template-areas:
+            "governor players"
+            "board    players"
+        ;
+        grid-template-rows: auto 1fr;
+    }
+
+    #fled_governors-area {
+        grid-area: governor;
+    }
+
+    #fled_board-container {
+        grid-area: board;
+    }
+
+    #fled_player-areas {
+        grid-area: players;
+    }
+
+    .fled_player-area:has(.fled_player-hand-tiles) {
+        margin-top: 14em !important;
+    }
+}
+
+#fled_surface {
+    position: relative;
+    width: 74.5em;
+    margin: 1em;
+}
+#fled_surface * {
+    box-sizing: border-box;
+}
+
+#fled_table {
+    position: relative;
+    display: inline-block;
+}
+
+#fled_board-container {
+    position: relative;
+    width: 74.5em;
+    min-height: 32em;
+    max-height: 69.5em;
+    height: 70vh;
+    overflow: hidden;
+    float: left; /* KEEP? */
+}
+
+#fled_board {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    background-image: url(img/fled_board-med.png);
+    background-size: 144em 134em;
+    width: 144em;
+    height: 134em;
+    transform-origin: 0 0;
+    transition: transform .4s ease-out;
+}
+
+#fled_board .fled_tile {
+    transition: none;
+}
+
+#fled_board .fled_tile.fled_tentative {
+    transition: transform .4s ease-out;
+    pointer-events: none; /* This allows player to click the tail cell to effectively move the rotate button during placement */
+}
+
+.fled_tooltip .fled_tile {
+    position: relative;
+    display: inline-block;
+    width: 10em;
+    height: 20em;
+}
+
+.fled_room-tooltip {
+    position: relative;
+    display: inline-block;
+    width: 10em !important;
+    height: 10em !important;
+}
+.fled_room-tooltip.fled_double {
+    height: 20em !important;
+}
+
+
+/* Minimap */
+
+#fled_minimap {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-image: url(img/fled_board-med.png);
+    background-size: cover;
+    width: 144em;
+    height: 134em;
+    transform-origin: 0 0;
+    transform: scale(0.08333333);
+    border: solid .1em black;
+    cursor: pointer;
+}
+
+#fled_minimap-focus {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 100%;
+    border-color: rgba(0, 0, 0, .3);
+    border-style: solid;
+    pointer-events: none;
+    transition: border .4s ease-out;
+}
+
+#fled_minimap .fled_tile {
+    pointer-events: none;
+}
+
+
+/* Slots on the Board */
+
+.fled_slot {
+    position: absolute;
+    border: dashed .3em rgba(0, 0, 0, .4);
+    cursor: pointer;
+    width: 8em;
+    height: 8em;
+}
+
+
+/* Destinations on the Board */
+
+.fled_destination {
+    position: absolute;
+    border: dashed 0.4em rgba(0, 0, 0, 0.8);
+    cursor: pointer;
+    width: 9.6em;
+    height: 9.6em;
+}
+.fled_destination.fled_horizontal {
+    width: 19.6em;
+}
+.fled_destination.fled_vertical {
+    height: 19.6em;
+}
+.fled_destination.fled_selected {
+    background-color: rgba(255, 255, 255, .2);
+}
+.fled_destination:not(.fled_selected):hover::after {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 100%;
+    content: ' ';
+    background-color: rgba(255, 255, 255, .2);
+}
+#fled_board:has(.fled_destination.fled_selected) .fled_destination:not(.fled_selected) {
+    border: dashed 0.4em rgba(0, 0, 0, .3);
+}
+
+
+/* Rotate Button */
+
+#fled_rotate-button {
+    position: absolute;
+    transition: left .4s ease-out, top .4s ease-out;
+    opacity: 1;
+    padding: .5em 1em;
+    border: solid .1em rgba(0, 0, 0, .25);
+    background-color: rgba(32, 64, 192, .4);
+    color: #fff;
+    border-radius: .5rem;
+    cursor: pointer;
+    box-shadow: .4rem .4rem 1rem rgba(0, 0, 0, .4);
+    font-size: 1.5em;
+    transform: translate(-50%, -50%);
+    user-select: none;
+    z-index: 1;
+}
+#fled_rotate-button:hover,
+#fled_rotate-button:active {
+    border: solid .1em rgba(0, 0, 0, .5);
+    background-color: rgba(32, 64, 192, .9);
+}
+#fled_rotate-button.fled_disabled {
+    background-color: #888;
+    color: #ccc;
+    opacity: .8;
+    text-decoration: line-through;
+}
+
+
+/* Tiles */
+
+.fled_tile {
+    display: block;
+    position: absolute;
+    background-size: 100em 100em;
+    background-repeat: no-repeat;
+    width: 10em;
+    height: 20em;
+    border-radius: .25em;
+    transform-origin: 50% 50%;
+    transform-style: preserve-3d;
+    transition: transform .8s ease-out; /* intended for flip animation, nothing else */
+}
+
+.fled_tile.fled_back {
+    transform: rotateY(-180deg);
+}
+.fled_tile-face-front {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+}
+.fled_tile-face-back {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: rotateY(-180deg);
+    backface-visibility: hidden;
+
+    display: block;
+    background-image: url(img/fled_tiles2.png);
+    background-repeat: no-repeat;
+    background-size: 80em 80em;
+    background-position: 0em -60em;
+    width: 10em;
+    height: 20em;
+    border-radius: .25em;
+}
+
+.fled_tile-1 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: 0 0;
+}
+.fled_tile-1-1 { background-position-y: -10em; }
+
+.fled_tile-2 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -10em 0;
+}
+.fled_tile-2-1 { background-position-y: -10em; }
+
+.fled_tile-3 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -20em 0;
+}
+.fled_tile-3-1 { background-position-y: -10em; }
+
+.fled_tile-4 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -30em 0;
+}
+.fled_tile-4-1 { background-position-y: -10em; }
+
+.fled_tile-5 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -40em 0;
+}
+.fled_tile-5-1 { background-position-y: -10em; }
+
+.fled_tile-6 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -50em 0;
+}
+.fled_tile-6-1 { background-position-y: -10em; }
+
+.fled_tile-7 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -60em 0;
+}
+.fled_tile-7-1 { background-position-y: -10em; }
+
+.fled_tile-8 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -70em 0;
+}
+.fled_tile-8-1 { background-position-y: -10em; }
+
+.fled_tile-9 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -80em 0;
+}
+.fled_tile-9-1 { background-position-y: -10em; }
+
+.fled_tile-10 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -90em 0;
+}
+.fled_tile-10-1 { background-position-y: -10em; }
+
+.fled_tile-11 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: 0 -20em;
+}
+.fled_tile-11-1 { background-position-y: -30em; }
+
+.fled_tile-12 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -10em -20em;
+}
+.fled_tile-12-1 { background-position-y: -30em; }
+
+.fled_tile-13 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -20em -20em;
+}
+.fled_tile-13-1 { background-position-y: -30em; }
+
+.fled_tile-14 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -30em -20em;
+}
+.fled_tile-14-1 { background-position-y: -30em; }
+
+.fled_tile-15 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -40em -20em;
+}
+.fled_tile-15-1 { background-position-y: -30em; }
+
+.fled_tile-16 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -50em -20em;
+}
+.fled_tile-16-1 { background-position-y: -30em; }
+
+.fled_tile-17 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -60em -20em;
+}
+.fled_tile-17-1 { background-position-y: -30em; }
+
+.fled_tile-18 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -70em -20em;
+}
+.fled_tile-18-1 { background-position-y: -30em; }
+
+.fled_tile-19 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -80em -20em;
+}
+.fled_tile-19-1 { background-position-y: -30em; }
+
+.fled_tile-20 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -90em -20em;
+}
+.fled_tile-20-1 { background-position-y: -30em; }
+
+.fled_tile-21 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: 0 -40em;
+}
+.fled_tile-21-1 { background-position-y: -50em; }
+
+.fled_tile-22 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -10em -40em;
+}
+.fled_tile-22-1 { background-position-y: -50em; }
+
+.fled_tile-23 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -20em -40em;
+}
+.fled_tile-23-1 { background-position-y: -50em; }
+
+.fled_tile-24 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -30em -40em;
+}
+.fled_tile-24-1 { background-position-y: -50em; }
+
+.fled_tile-25 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -40em -40em;
+}
+.fled_tile-25-1 { background-position-y: -50em; }
+
+.fled_tile-26 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -50em -40em;
+}
+.fled_tile-26-1 { background-position-y: -50em; }
+
+.fled_tile-27 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -60em -40em;
+}
+.fled_tile-27-1 { background-position-y: -50em; }
+
+.fled_tile-28 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -70em -40em;
+}
+.fled_tile-28-1 { background-position-y: -50em; }
+
+.fled_tile-29 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -80em -40em;
+}
+.fled_tile-29-1 { background-position-y: -50em; }
+
+.fled_tile-30 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -90em -40em;
+}
+.fled_tile-30-1 { background-position-y: -50em; }
+
+.fled_tile-31 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: 0 -60em;
+}
+.fled_tile-31-1 { background-position-y: -70em; }
+
+.fled_tile-32 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -10em -60em;
+}
+.fled_tile-32-1 { background-position-y: -70em; }
+
+.fled_tile-33 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -20em -60em;
+}
+.fled_tile-33-1 { background-position-y: -70em; }
+
+.fled_tile-34 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -30em -60em;
+}
+.fled_tile-34-1 { background-position-y: -70em; }
+
+.fled_tile-35 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -40em -60em;
+}
+.fled_tile-35-1 { background-position-y: -70em; }
+
+.fled_tile-36 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -50em -60em;
+}
+.fled_tile-36-1 { background-position-y: -70em; }
+
+.fled_tile-37 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -60em -60em;
+}
+.fled_tile-37-1 { background-position-y: -70em; }
+
+.fled_tile-38 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -70em -60em;
+}
+.fled_tile-38-1 { background-position-y: -70em; }
+
+.fled_tile-39 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -80em -60em;
+}
+.fled_tile-39-1 { background-position-y: -70em; }
+
+.fled_tile-40 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -90em -60em;
+}
+.fled_tile-40-1 { background-position-y: -70em; }
+
+.fled_tile-41 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: 0 -80em;
+}
+.fled_tile-41-1 { background-position-y: -90em; }
+
+.fled_tile-42 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -10em -80em;
+}
+.fled_tile-42-1 { background-position-y: -90em; }
+
+.fled_tile-43 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -20em -80em;
+}
+.fled_tile-43-1 { background-position-y: -90em; }
+
+.fled_tile-44 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -30em -80em;
+}
+.fled_tile-44-1 { background-position-y: -90em; }
+
+.fled_tile-45 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -40em -80em;
+}
+.fled_tile-45-1 { background-position-y: -90em; }
+
+.fled_tile-46 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -50em -80em;
+}
+.fled_tile-46-1 { background-position-y: -90em; }
+
+.fled_tile-47 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -60em -80em;
+}
+.fled_tile-47-1 { background-position-y: -90em; }
+
+.fled_tile-48 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -70em -80em;
+}
+.fled_tile-48-1 { background-position-y: -90em; }
+
+.fled_tile-49 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -80em -80em;
+}
+.fled_tile-49-1 { background-position-y: -90em; }
+
+.fled_tile-50 {
+    background-image: url(img/fled_tiles-front1.png);
+    background-position: -90em -80em;
+}
+.fled_tile-50-1 { background-position-y: -90em; }
+
+.fled_tile-51 {
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    background-position: -50em 0em;
+}
+.fled_tile-51-1 { background-position-y: -10em; }
+
+.fled_tile-52 {
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    background-position: -60em 0em;
+}
+.fled_tile-52-1 { background-position-y: -10em; }
+
+.fled_tile-53 {
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    background-position: -70em 0em;
+}
+.fled_tile-53-1 { background-position-y: -10em; }
+
+.fled_tile-54 {
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    background-position: -50em -20em;
+}
+.fled_tile-54-1 { background-position-y: -10em; }
+
+.fled_tile-55 {
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    background-position: -60em -20em;
+}
+.fled_tile-55-1 { background-position-y: -10em; }
+
+.fled_tile-56 {
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    background-position: -70em -20em;
+}
+.fled_tile-56-1 { background-position-y: -10em; }
+
+.fled_tile-70 {
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    background-position: -50em -40em;
+}
+.fled_tile-70-1 { background-position-y: -10em; }
+
+.fled_tile-71 {
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    background-position: -60em -40em;
+}
+.fled_tile-71-1 { background-position-y: -10em; }
+
+.fled_tile-72 {
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    background-position: -70em -40em;
+}
+.fled_tile-72-1 { background-position-y: -10em; }
+
+.fled_tile-73 {
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    background-position: -50em -60em;
+}
+.fled_tile-73-1 { background-position-y: -10em; }
+
+.fled_tile-74 {
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    background-position: -60em -60em;
+}
+.fled_tile-74-1 { background-position-y: -10em; }
+
+.fled_tile-75 {
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    background-position: -70em -60em;
+}
+.fled_tile-75-1 { background-position-y: -10em; }
+
+
+/* Rooms */
+
+.fled_room {
+    position: relative;
+    left: 0;
+    top: 0;
+    width: 10em;
+    height: 10em;
+}
+.fled_room-0 {}
+.fled_room-1 {
+}
+
+
+/* Meeples */
+
+.fled_meeple {
+    position: absolute;
+    display: block;
+    background-image: url(img/fled_meeples.png);
+    background-repeat: no-repeat;
+    background-size: 24em 15em;
+    width: 6em;
+    height: 7.5em;
+    z-index: 1;
+    transition: opacity .2s ease-out;
+    pointer-events: none;
+}
+
+.fled_meeple-blue     { background-position:     0      0; }
+.fled_meeple-green    { background-position:  -6em      0; }
+.fled_meeple-orange   { background-position: -12em      0; }
+.fled_meeple-yellow   { background-position:     0 -7.5em; }
+.fled_meeple-dog      { background-position:  -6em -7.5em; }
+.fled_meeple-ghost    { background-position: -12em -7.5em; }
+.fled_meeple-warder   { background-position: -18em      0; }
+.fled_meeple-chaplain { background-position: -18em -7.5em; }
+
+.fled_meeple.fled_selectable {
+    pointer-events: all;
+    cursor: pointer;
+}
+.fled_meeple.fled_selected::after,
+.fled_meeple.fled_selectable::after {
+    position: absolute;
+    display: block;
+    content: ' ';
+    left: -0.6em;
+    top: -0.7em;
+    width: calc(100% - 0.5em); /* cut off the extra space on the right from the drop shadow */
+    height: calc(100% + 0.5em);
+    border: dashed .4em rgba(32, 32, 32, .8);
+    border-radius: 1.7em;
+}
+.fled_meeple.fled_selectable:hover::after {
+    background-color: rgba(255, 255, 255, .1);
+}
+
+
+/* Governor Tile and Roll Call Riles */
+
+#fled_governors-area {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap-reverse;
+    gap: .5em;
+    float: left;
+    clear: both;
+    padding: 1em 4.7em;
+    perspective: 50em;
+    z-index: 1;
+    width: 125%; /* Scaling down by 20% means we need to increase the width 25% to maintain the same effective width */
+    transform: scale(.8);
+    transform-origin: top left;
+    margin-bottom: -4em; /* Bring the map upwards because we're scaling down the row height from 20 to 16 -- note, this gap will grow as more rows are added! */
+}
+#fled_governors-area > .fled_tile {
+    position: relative;
+    box-shadow: 0.1em 0.1em 0.25em rgba(0, 0, 0, .4);
+}
+#fled_governors-area > .fled_tile.fled_back {
+    position: relative;
+    box-shadow: -0.1em 0.1em 0.25em rgba(0, 0, 0, .4);
+}
+
+#fled_tile-rc-0 .fled_tile-face-front { background-position: -10em -40em; }
+#fled_tile-rc-1 .fled_tile-face-front { background-position: -20em -40em; }
+#fled_tile-rc-2 .fled_tile-face-front { background-position: -30em -40em; }
+#fled_tile-rc-3 .fled_tile-face-front { background-position: -40em -40em; }
+
+#fled_tile-rc-0 .fled_tile-face-back { background-position: -10em -60em; }
+#fled_tile-rc-1 .fled_tile-face-back { background-position: -20em -60em; }
+#fled_tile-rc-2 .fled_tile-face-back { background-position: -30em -60em; }
+#fled_tile-rc-3 .fled_tile-face-back { background-position: -40em -60em; }
+
+#fled_tile-rc-governor .fled_tile-face-front { background-position: 0em -40em; }
+
+#fled_governors-area .fled_tile-rc .fled_tile-face-front {
+    background-image: url(img/fled_tiles2.png);
+    background-repeat: no-repeat;
+    background-size: 80em 80em;
+    border-radius: .25em;
+}
+#fled_governors-area .fled_tile-rc .fled_tile-face-back {
+    background-image: url(img/fled_tiles2.png);
+    background-repeat: no-repeat;
+    background-size: 80em 80em;
+    border-radius: .25em;
+    transform: rotateY(-180deg);
+    backface-visibility: hidden;
+}
+
+.fled_state-client_selectGovernorTile #fled_governors-area > .fled_tile.fled_selectable,
+.fled_state-drawTiles #fled_governors-area > .fled_tile.fled_selectable {    
+    cursor: pointer;
+    transition: transform .2s ease-out;
+}
+.fled_state-client_selectGovernorTile #fled_governors-area > .fled_tile.fled_selected,
+.fled_state-client_confirmGovernorTile #fled_governors-area > .fled_tile.fled_selected,
+.fled_state-drawTiles #fled_governors-area > .fled_tile.fled_selected {
+    cursor: default;
+    position: relative;
+    z-index: 1;
+    transform: scale(1.25) !important;
+}
+.fled_state-client_selectGovernorTile #fled_governors-area > .fled_tile.fled_selectable::after,
+.fled_state-drawTiles #fled_governors-area > .fled_tile.fled_selectable::after {
+    position: absolute;
+    display: block;
+    content: ' ';
+    left: -0.5em;
+    top: -0.5em;
+    width: calc(100% + 0.5em);
+    height: calc(100% + 0.5em);
+    border: dashed .2em rgba(32, 32, 32, .8);
+    border-radius: .5em;
+}
+.fled_state-client_selectGovernorTile #fled_governors-area > .fled_tile.fled_selectable:hover::after,
+.fled_state-drawTiles #fled_governors-area > .fled_tile.fled_selectable:hover::after {
+    background-color: rgba(255, 255, 255, .1);
+}
+.fled_state-client_selectGovernorTile #fled_governors-area > .fled_tile.fled_selected:hover::after,
+.fled_state-drawTiles #fled_governors-area > .fled_tile.fled_selected:hover::after {
+    background-color: unset;
+}
+
+
+/* Whistle */
+
+#fled_whistle-host {
+    position: absolute;
+    left: 0;
+    bottom: 10em;
+    width: 8em;
+    height: 3.8em;
+    z-index: 1;
+    transition: transform .4s ease-out;
+}
+
+#fled_whistle {
+    position: absolute;
+    background-image: url(img/fled_whistle.png);
+    background-repeat: no-repeat;
+    background-size: contain;
+    left: 0;
+    top: 0;
+    width: 8em;
+    height: 3.8em;
+    z-index: 1;
+    transition: transform .4s ease-out;
+}
+#fled_whistle.fled_raised {
+    transform: translate(0, -2em) scale(1.25);
+}
+.fled_whistle-pos-0 {
+    transform: translate(5.8em, 4em);
+}
+.fled_whistle-pos-1 {
+    transform: translate(16.2em, 4em);
+}
+.fled_whistle-pos-2 {
+    transform: translate(26.8em, 4em);
+}
+.fled_whistle-pos-3 {
+    transform: translate(37.2em, 4em);
+}
+.fled_whistle-pos-4 {
+    transform: translate(47.8em, 0em);
+}
+
+#fled_whistle-shadow {
+    position: absolute;
+    background-image: url(img/fled_whistle-shadow.png);
+    background-repeat: no-repeat;
+    background-size: contain;
+    left: 0;
+    top: 0;
+    width: 8em;
+    height: 3.8em;
+}
+
+
+/* Player Areas */
+
+#fled_player-areas {
+    display: inline-flex;
+    flex-direction: column;
+    float: left;
+}
+.fled_player-area {
+    min-width: 64em;
+    border-left-width: 1em;
+    border-left-style: solid;
+    border-radius: .5em;
+}
+.fled_player-area.whiteblock {
+    padding: 0 1em 1em 1em;
+}
+.fled_player-area.fled_color-0 { border-left-color: #e1cb1e; }
+.fled_player-area.fled_color-1 { border-left-color: #507cbf; }
+.fled_player-area.fled_color-2 { border-left-color: #f36e29; }
+.fled_player-area.fled_color-3 { border-left-color: #50a34c; }
+
+.fled_player-area:has(.fled_player-hand-tiles) {
+    margin-top: 8em;
+}
+.fled_player-hand-tiles {
+    position: relative;
+    perspective: 50em;
+    margin-bottom: 1em;
+    display: block;
+    top: -10em;
+    height: 11em;
+    z-index: 1; /* Want this to be higher than the ref/prisoner/inventory so tiles sliding into inventory slide on top */ 
+}
+
+.fled_player-hand-tiles .fled_tile {
+    position: absolute;
+    width: 10em;
+    height: 20em;
+    border-radius: .25em;
+    transition: transform .8s ease-out, top .2s ease-out;
+}
+.fled_player-hand-tiles .fled_tile:not(.fled_hidden) {
+    box-shadow: 0.1em 0.1em 0.25em rgba(0, 0, 0, .4);
+}
+
+.fled_player-hand-tiles .fled_tile.fled_selectable::after {
+    position: absolute;
+    display: block;
+    content: ' ';
+    left: -0.4em;
+    top: -0.4em;
+    width: calc(100% + 0.5em);
+    height: calc(100% + 0.5em);
+    border: dashed .2em rgba(32, 32, 32, .8);
+    border-radius: .5em;
+}
+.fled_player-hand-tiles .fled_tile.fled_selectable:hover::after {
+    background-color: rgba(255, 255, 255, .1);
+}
+.fled_player-hand-tiles .fled_tile.fled_selected:hover::after {
+    background-color: unset;
+}
+
+.fled_player-hand-tiles .fled_tile.fled_selectable:not(.fled_selected) {
+    cursor: pointer;
+}
+.fled_player-hand-tiles .fled_tile.fled_selected {
+    top: -5em;
+}
+.fled_state-addTile .fled_player-hand-tiles .fled_tile:not(.fled_selectable):after {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    content: ' ';
+    background-color: #000;
+    opacity: .1;
+    cursor: not-allowed;
+}
+
+.player-board .fled_tile {
+    position: absolute;
+    width: 10em;
+    height: 20em;
+    border-radius: .25em;
+    transition: none;
+}
+
+
+/* Player Area */
+
+.fled_player-area-tiles {
+    position: relative;
+    display: inline-flex;
+    flex-direction: row;
+    gap: .25em;
+    perspective: 50em;
+}
+.fled_player-area-tiles:has(.fled_selectable) {
+    z-index: 1; /* put it higher than the Hand so that selected (raised) tiles are not underneath hand tiles */
+}
+.fled_player-area-tiles > * {
+    width: 10em;
+    height: 20em;
+}
+.fled_player-area-tiles .fled_tile {
+    width: 10em;
+    height: 20em;
+    box-shadow: 0.1em 0.1em 0.25em rgba(0, 0, 0, .4);
+}
+.fled_shackle-slot .fled_tile-face-back {
+    display: block;
+    background-image: url(img/fled_tiles2.png);
+    background-repeat: no-repeat;
+    background-size: 80em 80em;
+    background-position: 0em -60em;
+    width: 10em;
+    height: 20em;
+    border-radius: .25em;
+}
+.fled_shackle-slot .fled_tile {
+    border-radius: .25em;
+    box-shadow: -0.1em 0.1em 0.25em rgba(0, 0, 0, .4); /* reverse the X offset of the shadow because card is flipped */
+}
+.fled_shackle-slot .fled_tile {
+    transform: rotateY(180deg) !important;
+}
+
+
+/* Reference Tile */
+
+.fled_reference-tile {
+    position: relative;
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    border-radius: .25em;
+    background-position: 0 0;
+    width: 10em;
+    height: 20em;
+    box-shadow: 0.1em 0.1em 0.25em rgba(0, 0, 0, .4);
+}
+.fled_reference-tile > * {
+    position: absolute;
+    width: 4.4em;
+}
+.fled_ref-tile-zone-0, .fled_ref-tile-zone-2, .fled_ref-tile-zone-4, .fled_ref-tile-zone-6, .fled_ref-tile-zone-8 {
+    left: .5em;
+}
+.fled_ref-tile-zone-1, .fled_ref-tile-zone-3, .fled_ref-tile-zone-5, .fled_ref-tile-zone-7, .fled_ref-tile-zone-9 {
+    right: .5em;
+}
+.fled_ref-tile-zone-0, .fled_ref-tile-zone-1 {
+    top: .5em;
+    height: 2.5em;
+    width: 4.5em;
+}
+.fled_ref-tile-zone-2, .fled_ref-tile-zone-3 {
+    top: 3em;
+    height: 2.75em;
+    width: 4.5em;
+}
+.fled_ref-tile-zone-4, .fled_ref-tile-zone-5 {
+    top: 6.25em;
+    height: 2.5em;
+}
+.fled_ref-tile-zone-6, .fled_ref-tile-zone-7 {
+    top: 8.75em;
+}
+.fled_ref-tile-zone-6 {
+    height: 2.625em;
+}
+.fled_ref-tile-zone-7 {
+    height: 4.375em;
+}
+.fled_ref-tile-zone-8 {
+    top: 11.375em;
+    height: 3.375em;
+}
+.fled_ref-tile-zone-9 {
+    top: 13em;
+    height: 2.375em;
+}
+
+
+/* Prisoner Tile */
+
+.fled_prisoner-tile {
+    position: relative;
+    width: 10em;
+    height: 20em;
+    box-shadow: 0.1em 0.1em 0.25em rgba(0, 0, 0, .4);
+}
+.fled_prisoner-tile .fled_tile-face-front,
+.fled_prisoner-tile .fled_tile-face-back {
+    background-image: url(img/fled_tiles2.png);
+    background-size: 80em 80em;
+    border-radius: .25em;
+}
+.fled_prisoner-tile.fled_color-2 > * { /* orange */
+    background-position: -10em 0;
+}
+.fled_prisoner-tile.fled_color-1 > * { /* blue */
+    background-position: -20em 0;
+}
+.fled_prisoner-tile.fled_color-3 > * { /* green */
+    background-position: -30em 0;
+}
+.fled_prisoner-tile.fled_color-0 > * { /* yellow */
+    background-position: -40em 0;
+}
+.fled_prisoner-tile .fled_tile-face-back {
+    background-position-y: -20em !important;
+}
+
+.fled_prisoner-tile .fled_zone {
+    top: .5em;
+    width: 1.8em;
+    height: 5.2em;
+    position: absolute;
+}
+.fled_prisoner-tile .fled_zone.fled_prisoner-tile-zone-0 {
+    left: .5em;
+}
+.fled_prisoner-tile .fled_zone.fled_prisoner-tile-zone-1 {
+    left: 2.3em;
+}
+.fled_prisoner-tile .fled_zone.fled_prisoner-tile-zone-2 {
+    left: 4.1em;
+}
+.fled_prisoner-tile .fled_zone.fled_prisoner-tile-zone-3 {
+    left: 5.9em;
+    width: 1.6em;
+}
+.fled_prisoner-tile .fled_zone.fled_prisoner-tile-zone-4 {
+    left: 7.5em;
+    width: 2em;
+}
+.fled_prisoner-tile .fled_zone.fled_prisoner-tile-zone-5 {
+    left: 7.6em;
+    width: 2em;
+    top: 8em;
+    height: 3.8em;
+}
+
+
+/* Player Inventory */
+
+.fled_inventory {
+    width: 40.75em;
+    display: flex;
+    flex-direction: row;
+    gap: .25em;
+}
+.fled_inventory-slot {
+    position: relative;
+    width: 10em;
+    height: 20em;
+    border: dashed .1em rgba(0, 0, 0, .2);
+    border-radius: .25em;
+}
+.fled_inventory-slot .fled_tile {
+    transition: top .2s ease-out;
+}
+.fled_inventory-slot::before {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    font-size: 4em;
+    line-height: 20rem;
+    text-align: center;
+    opacity: .1;
+    pointer-events: none;
+}
+.fled_inventory-slot:nth-child(1)::before { content: '1'; }
+.fled_inventory-slot:nth-child(2)::before { content: '2'; }
+.fled_inventory-slot:nth-child(3)::before { content: '3'; }
+.fled_inventory-slot:nth-child(4)::before { content: '4'; }
+
+.fled_inventory:has(.fled_selectable) .fled_tile:not(.fled_selectable):after {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    content: ' ';
+    background-color: #000;
+    opacity: .1;
+    cursor: not-allowed;
+}
+.fled_inventory .fled_tile.fled_selectable {
+    cursor: pointer;
+    transition: transform .2s ease-out;
+}
+.fled_inventory .fled_tile.fled_selected {
+    position: relative;
+    transform: translate(0, -3em) !important;
+}
+.fled_inventory .fled_tile.fled_selectable::after {
+    position: absolute;
+    display: block;
+    content: ' ';
+    left: -0.5em;
+    top: -0.5em;
+    width: calc(100% + 0.5em);
+    height: calc(100% + 0.5em);
+    border: dashed .2em rgba(32, 32, 32, .8);
+    border-radius: .5em;
+}
+.fled_inventory .fled_tile.fled_selectable:hover::after {
+    background-color: rgba(255, 255, 255, .1);
+}
+.fled_inventory .fled_tile.fled_selected:hover::after {
+    background-color: unset;
+}
+
+
+/* Reference Tile Tool Tips */
+
+.fled_zone:after {
+    opacity: 0;
+    transition: opacity .2s ease-in-out;
+}
+.fled_zone:hover:after {
+    position: absolute;
+    content: ' ';
+    background-color: #fff;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    opacity: .2;
+}
+
+
+/* Icons for Action buttons */
+
+.fled_action-button-icon {
+    background-image: url(img/fled_actions.png);
+    background-repeat: no-repeat;
+    background-size: 6em 4.34375em;
+    width: 2em;
+    height: 4.34375em;
+    background-position-y: 0;
+    float: left;
+    clear: left;
+    vertical-align: middle;
+    margin-right: 1em;
+}
+.disabled .fled_action-button-icon {
+    opacity: .3;
+}
+
+#fled_button-move-icon { background-position-x:    0; }
+#fled_button-surrender-icon { background-position-x: -2.1em; }
+#fled_button-add-icon { background-position-x: -4em; }
+
+
+/* Log Images */
+
+.fled_log-moon {}
+    
+.fled_log-room {}
+.fled_log-room-0 {}
+
+.fled_log-npc {}
+.fled_log-npc-warder1,
+.fled_log-npc-warder2,
+.fled_log-npc-warder {}
+.fled_log-npc-chaplain {}
+
+
+/* Confirm Countdown */
+
+.fled_countdown {
+    margin-left: 0.7em;
+    vertical-align: text-bottom;
+}
+
+
+/* Utility Rules */
+
+.fled_no-transition {
+    transition-delay: 0 !important;
+    transition-duration: 0 !important;
+    transition-property: none !important;
+}
+
+.fled_hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.fled_disabled {
+    pointer-events: none;
+    opacity: .9;
+}
+
+.fled_sticky {
+    position: sticky;
+}
+
+#page-title .bgabutton:has(.fled_action-button-icon) {
+    line-height: 4.34375em;
+}
+
+.bgabutton.disabled {
+    text-decoration: line-through;
+}
+
+.dijitTooltipContainer:has(.fled_tile.fled_tile-vertical) {
+    width: 15em;
+    height: 30em; 
+}
+.dijitTooltipContainer:has(.fled_tile.fled_tile-horizontal) {
+    width: 30em;
+    height: 15em;
+}
+.dijitTooltipContainer:has(.fled_room-tooltip) {
+    width: 15em;
+    height: 15em; 
+}
+
+#overall-content {
+    overflow: visible !important; /* Override BGA's overflow: hidden so we can use position: sticky */
+}
+
+#fled_last-turn {
+    background: rgba(255, 127, 0);
+    color: #fff;
+}
