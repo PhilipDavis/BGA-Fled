@@ -156,8 +156,6 @@ const fled_Templates = {
             '<path fill="#fff" d="M50, 50 L50,0 A50,50 0 1 0 51,0 Z"></path></svg>' +
         '</svg>',
 };
-const fled_Templates = fled_Templates;
-
 
 </script>  
 
