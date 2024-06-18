@@ -5,11 +5,6 @@
             "name": "Size of the prison",
             "type": "int"
         },
-        "warder_count": {
-            "id": 11,
-            "name": "Warders in the prison",
-            "type": "int"
-        },
         "whistles_blown": {
             "id": 12,
             "name": "Whistles blown",
@@ -33,11 +28,6 @@
         "specter_distance": {
             "id": 16,
             "name": "Distance travelled by the Specter",
-            "type": "int"
-        },
-        "governors_inventory_max": {
-            "id": 17,
-            "name": "Largest Governor's Inventory",
             "type": "int"
         },
         "confiscations": {
@@ -130,11 +120,6 @@
         "escaped": {
             "id": 21,
             "name": "Escaped the prison",
-            "type": "int"
-        },
-        "opponent_escaped": {
-            "id": 22,
-            "name": "Opponents escaped the prison",
             "type": "int"
         },
         "traversed_window": {

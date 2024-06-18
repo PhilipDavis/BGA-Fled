@@ -43,7 +43,9 @@ $machinestates = [
         'descriptionmyturn' => clienttranslate('${you} must place your bunk tile in the prison'),
         'type' => 'activeplayer',
         'possibleactions' => [ 'placeTile' ],
-        'transitions' => [ '' => STATE_NEXT_TURN ],
+        'transitions' => [
+            'nextPhase' => STATE_NEXT_TURN,
+        ],
     ],
 
     // Add tile to prison
@@ -53,7 +55,10 @@ $machinestates = [
         'descriptionmyturn' => clienttranslate('${you} must select a tile from your hand to add to the prison'),
         'type' => 'activeplayer',
         'possibleactions' => [ 'placeTile', 'discard', 'escape' ],
-        'transitions' => [ 'nextPhase' => STATE_PLAY_TILES ],
+        'transitions' => [
+            'nextPhase' => STATE_PLAY_TILES,
+            'nextTurn' => STATE_NEXT_TURN, // If player escaped
+        ],
     ],
 
     // Play two tiles
@@ -66,6 +71,7 @@ $machinestates = [
         'transitions' => [
             'nextTile' => STATE_PLAY_TILES,
             'nextPhase' => STATE_DRAW_TILES,
+            'nextTurn' => STATE_NEXT_TURN, // If player escaped
         ],
     ],
 

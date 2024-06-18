@@ -8,7 +8,7 @@
  * -----
  */
 
- define([
+define([
     "dojo","dojo/_base/declare",
     "dojo/aspect", // To facilitate the insertion of HTML markup into log entries
     "bgagame/modules/FledLogic",
@@ -181,7 +181,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                             // the name of the data key (which must have been sent from server side) and we
                             // replace the old key with the rich content.
                             const { dataKey, index } = match.groups;
-                            const dataValue = map[dataKey];
+                            const dataValue = map[`${dataKey}${index}`];
                             if (dataValue !== undefined) {
                                 map[key] = this.format_block(`${BgaGameId}_Templates.${dataKey}Log`, {
                                     DATA: dataValue.toString(),
@@ -251,6 +251,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             ]);
 
             this.createMiniMap();
+            this.instantZoomTo(0, 0, 1);
             this.animateSmartZoomAsync();
             
             // Layout tiles on the board and minimap
@@ -690,10 +691,10 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             }
         },
 
-        createDestinationSlot(x, y, isDouble) {
+        createDestinationSlot(x, y) {
             let dx = 1, dy = 1;
-            if (isDouble) {
-                const { orientation } = unpackCell(fled.getTileAt(x, y));
+            const { tileId, orientation } = unpackCell(fled.getTileAt(x, y));
+            if (isDoubleTile(tileId)) {
                 if (orientation === Orientation.EastWest) { x--; dx++; }
                 if (orientation === Orientation.WestEast) dx++;
                 if (orientation === Orientation.NorthSouth) dy++;
@@ -854,9 +855,9 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 }
                 case 'client_selectPlayerDestination':
                     const moves = fled.getLegalMovementMoves(this.clientStateArgs.selectedTileId);
-                    for (const { path, double } of moves) {
+                    for (const { path } of moves) {
                         const [ x, y ] = path[path.length - 1];
-                        this.createDestinationSlot(x, y, double);
+                        this.createDestinationSlot(x, y);
                     }
                     break;
 
@@ -871,9 +872,9 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
                 case 'client_selectWarderDestination':
                     const warderMoves = fled.getLegalWarderMoves(this.clientStateArgs.selectedWarder);
-                    for (const { path, double } of warderMoves) {
+                    for (const { path } of warderMoves) {
                         const [ x, y ] = path[path.length - 1];
-                        this.createDestinationSlot(x, y, double);
+                        this.createDestinationSlot(x, y);
                     }
                     break;
 
@@ -894,7 +895,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                         meepleDiv.classList.add('fled_selected');
                     }
                     else {
-                        const slotDiv = this.createDestinationSlot(pos.x, pos.y, isDoubleTile(tileId)); 
+                        const slotDiv = this.createDestinationSlot(pos.x, pos.y); 
                         slotDiv.classList.add('fled_selected');
                     }
                     break;
@@ -1712,7 +1713,6 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
             const inSolitary = this.isInSolitary(tileId, name);
             const meeplesInRoom = fled.getMeeplesAt(xCell, yCell, inSolitary);
-            if (!meeplesInRoom.length) throw new Error('Empty room');
             const offsetsArray =
                 tileId === SpecialTile.SolitaryConfinement
                     ? isHorizontal
@@ -1727,9 +1727,9 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                             ? horizontalRoomOffsets
                             : verticalRoomOffsets
                         : singleRoomOffsets;
-            const offsets = offsetsArray[meeplesInRoom.length];
+            const offsets = offsetsArray[meeplesInRoom.length || 1];
             if (!offsets) throw new Error('Invalid count');
-            const index = meeplesInRoom.indexOf(name);
+            const index = meeplesInRoom.length ? meeplesInRoom.indexOf(name) : 0;
             if (index < 0) throw new Error('Meeple not found');
             
             // Meeple position is the base room position plus the meeple offset
@@ -1783,7 +1783,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
         //
         // Calculate scale factor and board offsets
         //
-        calculateSmartZoom(padding = 0) {
+        calculateZoom(cells) {
             const containerDiv = document.getElementById('fled_board-container');
             const containerRect = containerDiv.getBoundingClientRect();
 
@@ -1793,8 +1793,6 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             };
 
             // Calculate the minimum area we want to show (at 1:1 scale)
-            const cells = this.calculateSmartZoomCells(padding);
-
             console.log(`Smart zoom on cells: ${JSON.stringify(cells)}`);
 
             const extraPadding = 0.1;
@@ -1982,7 +1980,8 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 !this.clientStateArgs.alreadyPlaced
             ;
 
-            const smartZoom = this.calculateSmartZoom(isAddingTiles ? 2 : 1);
+            const cells = this.calculateSmartZoomCells(isAddingTiles ? 2 : 1);
+            const smartZoom = this.calculateZoom(cells);
             if (!force && !this.hasSmartZoomChanged(smartZoom)) {
                 return;
             }
@@ -2124,8 +2123,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
         },
 
         async animateDrawTileAsync(playerId, tileId) {
-            // TODO
-            if (playerId != this.myPlayerId) return; // TODO: animations for other players
+            if (playerId != this.myPlayerId) return;
 
             await Promise.all([
                 this.animateHandToMakeRoomForNewTileAsync(),
@@ -2240,10 +2238,6 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
         async animateDiscardInventoryTileAsync(playerId, tileId) {
             const tileDiv = this.getTileDiv(tileId);
             if (!tileDiv) return;
-
-
-            // TODO: figure out which inventory slots are affected
-            // TODO: perhaps animate to close gap?
 
             // There currently is no discard pile... just animate up and fade out
 
@@ -2556,14 +2550,44 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             tileDiv.style.transform = newTransform;
         },
 
-        async animateCloseGapInInventoryAsync() {
-            const handDiv = document.getElementById(`fled_player-${this.myPlayerId}-inventory`);
-            const tileDivs = Array.from(handDiv.children);
+        async animateCloseGapInInventoryAsync(playerId) {
+            const inventoryDiv = document.getElementById(`fled_inventory-${playerId}`);
+            const tileDivs = Array.from(inventoryDiv.querySelectorAll('.fled_tile'));
             await Promise.all(
                 tileDivs.map(async (tileDiv, i) => {
-                    await this.animateHandTileToNewPositionAsync(tileDiv, i, tileDivs.length)
+                    await this.animateInventoryTileToNewPositionAsync(playerId, tileDiv, i, tileDivs.length)
                 }),
             );
+        },
+
+        async animateInventoryTileToNewPositionAsync(playerId, tileDiv, slotIndex) {
+            const srcRect = tileDiv.getBoundingClientRect();
+            const srcMidX = Math.round(srcRect.x + srcRect.width / 2);
+
+            const destDiv = document.getElementById(`fled_inventory-${playerId}-slot-${slotIndex}`);
+
+            // Can bail out if the tile is already in the desired inventory slot
+            if (tileDiv.parentElement === destDiv) {
+                return;
+            }
+
+            const destRect = destDiv.getBoundingClientRect();
+            const destMidX = Math.round(destRect.x + destRect.width / 2);
+
+            const deltaX = destMidX - srcMidX;
+
+            this.raiseElement(tileDiv);
+
+            await tileDiv.animate({
+                transform: [
+                    `translate(${deltaX}px, 0)`,
+                ],
+            }, {
+                duration: ShortDuration,
+                easing: 'ease-out',
+            }).finished;
+
+            this.placeInElement(tileDiv, destDiv);
         },
 
         async animateTileFromHandToBoardAsync(tileId, x, y, orientation) {
@@ -2619,11 +2643,10 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             await this.animateCloseGapInHandAsync();
         },
 
-        async animateTileFromPlayerBoardToBoardAsync(playerId, tileId, x, y, orientation) {
-            // Rather than fiddle with the original tile, create a new one on the board
-            const tileDiv = this.createTileOnBoard(tileId, x, y, orientation, true);
-
+        async animateOpponentTileToBoardAsync(playerId, tileId, x, y, orientation) {
             await this.animateSmartZoomAsync();
+
+            const tileDiv = this.createTileOnBoard(tileId, x, y, orientation, true);
 
             await tileDiv.animate({
                 transform: [
@@ -2637,6 +2660,8 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 easing: 'ease-out',
                 fill: 'forwards',
             }).finished;
+
+            tileDiv.classList.remove('fled_hidden');
         },
 
         async animateTileFromGovernorInventoryToHandAsync(tileId) {
@@ -2820,17 +2845,6 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             div.style = '';
         },
 
-        setPlayerScore(playerId, score) {
-            // TODO
-            this.scoreCounter[playerId].setValue(score);
-
-            const scoreDiv = document.getElementById(`fled_score-${playerId}`);
-            scoreDiv.innerText =
-                score === 1
-                    ? _('(1 point)')
-                    : _('({n} points)').replace(/\{n\}/i, score);
-        },
-
 
         ///////////////////////////////////////////////////
         //// Player's action
@@ -2900,6 +2914,12 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 }
 
                 const selectedEnoughToEscape = fled.canEscapeWith(selectedInventoryTileIds);
+                if (selectedEnoughToEscape) {
+                    this.makeTilesNonSelectable();
+                }
+                else {
+                    this.makeTilesSelectable(fled.getInventoryTilesEligibleForEscape());
+                }
                 this.addConfirmButton(`fled_button-confirm-escape`, Preference.ConfirmWhenEscaping, this.onClickConfirmEscape, !selectedEnoughToEscape);
             }
             // Standard case where we only need one tile selected
@@ -2919,9 +2939,6 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 case 'addTile':
                 case 'addStarterTile':
                     this.createSlotsForLegalMoves(tileId);
-                
-                    // TODO: if another tile was selected before and sent to the board, we need to swap them
-                    
                     this.setClientState('client_selectSlot', {
                         descriptionmyturn: _('${you} must place the tile on the board'),
                     });
@@ -2964,8 +2981,11 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
                 case 'client_selectInventoryTiles':
                     if (this.clientStateArgs.selectedInventoryTileIds.length === this.clientStateArgs.selectionsNeeded) {
-                        this.setClientState('client_confirmAddToInventory', {
-                            descriptionmyturn: _('${you} will trade these tiles'),
+                        this.askConfirmationOrInvoke({
+                            state: 'client_confirmAddToInventory',
+                            prompt: _('${you} will trade these tiles'),
+                            pref: Preference.ConfirmWhenAddingToInventory,
+                            bypass: this.onClickConfirmAddToInventory,
                         });
                     }
                     break;
@@ -2978,17 +2998,21 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     break;
 
                 case 'client_selectTileForSurrender':
-                    // TODO: make confirm surrender a preference...?
-                    this.setClientState('client_confirmSurrender', {
-                        descriptionmyturn: _('${you} will surrender this tile'),
+                    this.askConfirmationOrInvoke({
+                        state: 'client_confirmSurrender',
+                        prompt: _('${you} will surrender this tile'),
+                        pref: Preference.ConfirmWhenSurrenderingTile,
+                        bypass: this.onClickConfirmSurrender,
                     });
                     break;
 
                 case 'drawTiles':
                 case 'client_selectGovernorTile':
-                    // TODO: make confirm take from governor a preference...?
-                    this.setClientState('client_confirmGovernorTile', {
-                        descriptionmyturn: _('${you} will take this tile'),
+                    this.askConfirmationOrInvoke({
+                        state: 'client_confirmGovernorTile',
+                        prompt: _('${you} will take this tile'),
+                        pref: Preference.ConfirmWhenTakingFromGovernor,
+                        bypass: this.onClickConfirmTakeFromGovernor,
                     });
                     break;
             }
@@ -3030,8 +3054,11 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
                 case 'client_selectPlayerToTarget':
                     this.clientStateArgs.selectedPlayer = name;
-                    this.setClientState('client_confirmWarderMovement', {
-                        descriptionmyturn: _('${you} must confirm the movement'),
+                    this.askConfirmationOrInvoke({
+                        state: 'client_confirmWarderMovement',
+                        prompt: _('${you} must confirm the movement'),
+                        pref: Preference.ConfirmWhenMovingWarder,
+                        bypass: this.onClickConfirmWarderMovement,
                     });
                     break;
             }
@@ -3041,9 +3068,11 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             const tile = Tiles[this.clientStateArgs.selectedTileId];
             switch (tile.color) {
                 case ScrollColor.Blue: // Blue can be added for no cost
-                    // TODO: make confirm add to inventory a preference...?
-                    this.setClientState('client_confirmAddToInventory', {
-                        descriptionmyturn: _('${you} will add this tile to your inventory'),
+                    this.askConfirmationOrInvoke({
+                        state: 'client_confirmAddToInventory',
+                        prompt: _('${you} will add this tile to your inventory'),
+                        pref: Preference.ConfirmWhenAddingToInventory,
+                        bypass: this.onClickConfirmAddToInventory,
                     });
                     break;
 
@@ -3079,9 +3108,12 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 this.clientStateArgs.selectedCoords = { x, y };
                 const destDiv = document.getElementById(`fled_slot-${x}-${y}`);
                 destDiv.classList.add('fled_selected');
-                // TODO: allow player to not require confirmation
-                this.setClientState('client_confirmMovement', {
-                    descriptionmyturn: _('${you} must confirm the movement'),
+
+                this.askConfirmationOrInvoke({
+                    state: 'client_confirmMovement',
+                    prompt: _('${you} must confirm the movement'),
+                    pref: Preference.ConfirmWhenMoving,
+                    bypass: this.onClickConfirmMovement,
                 });
                 return;
             }
@@ -3098,17 +3130,19 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     });
                 }
                 else {
+                    // TODO: differentiate between the different NPCs... I think chaplain is currently lumped in here...
                     this.clientStateArgs.selectedPlayer = meeples[0];
-                    // TODO: allow player to not require confirmation
-                    this.setClientState('client_confirmWarderMovement', {
-                        descriptionmyturn: _('${you} must confirm the warder movement'),
+                    this.askConfirmationOrInvoke({
+                        state: 'client_confirmWarderMovement',
+                        prompt: _('${you} must confirm the warder movement'),
+                        pref: Preference.ConfirmWhenMovingWarder,
+                        bypass: this.onClickConfirmWarderMovement,
                     });
                 }
                 return;
             }
 
             // For the given slot, choose one of the possible moves
-            // TODO: this code is written for the starting tile... need to generalize for a selected tile
             const moves = this.clientStateArgs.legalTileMoves;
             const tileId = this.clientStateArgs.selectedTileId;
             const matchingMoves = moves.filter(move => {
@@ -3169,6 +3203,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             this.clientStateArgs.movesIndex = 0;
             this.clientStateArgs.selectedCoords = { x, y };
 
+            // TODO: allow timed confirmation?
             this.setClientState('client_confirmTilePlacement', {
                 descriptionmyturn: _('${you} must confirm the tile placement'),
             });
@@ -3497,6 +3532,11 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             });
         },
 
+        //
+        // Helper function to either present an action confirmation
+        // or to perform an action directly, depending on the
+        // player's preferences
+        //
         askConfirmationOrInvoke({ state, prompt, pref, bypass }) {
             if (this.prefs[pref].value == ConfirmType.Disabled) {
                 bypass.call(this);
@@ -3578,7 +3618,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 return;
             }
 
-            await this.animateTileFromPlayerBoardToBoardAsync(playerId, tileId, x, y, orientation);
+            await this.animateOpponentTileToBoardAsync(playerId, tileId, x, y, orientation);
         },
 
         async notify_setupComplete({ players }) {
@@ -3601,7 +3641,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             ]);
         },
 
-        async notify_tileAddedToInventory({ playerId, tileId, score }) {
+        async notify_tileAddedToInventory({ playerId, tile: tileId, score }) {
             const player = fled.players[playerId];
             const slotIndex = player.inventory.length;
 
@@ -3634,7 +3674,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             }
         },
 
-        async notify_tookFromGovernor({ playerId, tileId }) {
+        async notify_tookFromGovernor({ playerId, tile: tileId }) {
             fled.removeTileFromGovernorInventory(tileId);
             fled.addTileToHand(playerId, tileId);
 
@@ -3729,7 +3769,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             this.scoreCounter[playerId].setValue(score);
         },
 
-        async notify_unshackled({ playerId, tileId, score }) {
+        async notify_unshackled({ playerId, tile: tileId, score }) {
             // Update internal state
             fled.unshacklePlayer(playerId);
             
@@ -3757,14 +3797,30 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             await this.animateRollCallWindowChangeAsync(oldIndex, newIndex);
         },
 
-        async notify_prisonerEscaped({ playerId, discards, score }) {
-            fled.escape(playerId, discards);
-
-            // TODO: animate the escape differently than a standard move?
+        async notify_prisonerEscaped({ playerId, score }) {
+            const player = fled.players[playerId];
             const [ x, y ] = player.pos;
+
+            // Scroll the player's tile into view
+            const { tileId } = unpackCell(fled.getTileAt(x, y));
+            const tileDiv = this.getTileDiv(tileId);
+            tileDiv.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+
+            // Zoom in on the escaping player
             const headPos = fled.getTileHeadPos(x, y);
+            const { zoom } = this.calculateZoom({ x1: x - 2, y1: y - 2, x2: x + 2, y2: y + 2 });
+            await this.animateZoomToAsync(x, y, zoom);
+            
+            await this.delayAsync(500);
+
+            // Move to the forest and then fade away
             await this.animatePlayerMoveAsync(playerId, headPos.x, headPos.y);
             await this.animatePlayerEscape(playerId);
+
+            // TODO: flip over the prisoner tile
+
+            // Update internal game state
+            fled.escape(playerId);
 
             this.scoreCounter[playerId].setValue(score);
         },

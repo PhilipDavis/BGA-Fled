@@ -135,9 +135,6 @@ const fledpd_Templates = {
     tileLog:
         '<span class="fled_log-tile fled_log-tile-${DATA}"></span>',
 
-    itemLog:
-        '<span class="fled_log-item fled_log-item-${DATA}" tooltip="${TEXT}"></span>',
-    
     moonLog:
         '<span class="fled_log-moon"></span>',
     

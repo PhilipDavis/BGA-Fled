@@ -1266,6 +1266,35 @@ six tiles... TODO
             );
         }
 
+        //
+        // Given a cell position, find the position of the tail of the tile at (x, y).
+        // Precondition: (x, y) is not empty
+        //
+        getTileTailPos(x, y) {
+            if (x < 0 || y < 0 || x >= FledWidth || y >= FledWidth)
+                throw new Error('Invalid location');
+
+            const { tileId, orientation } = unpackCell(this.getTileAt(x, y));
+
+            // Based on tile orientation, look at an adjacent cell
+            // to determine if it is actually the head of the tile
+            let xMod = x;
+            let yMod = y;
+            switch (orientation) {
+                case Orientation.NorthSouth: yMod = y + 1; break;
+                case Orientation.WestEast:   xMod = x + 1; break;
+                case Orientation.SouthNorth: yMod = y - 1; break;
+                case Orientation.EastWest:   xMod = x - 1; break;
+                default: throw new Error('invalid orientation');
+            }
+
+            return (
+                unpackCell(this.getTileAt(xMod, yMod)).tileId === tileId
+                    ? { x: xMod, y: yMod }
+                    : { x, y }
+            );
+        }
+
         setTileAt(tileId, x, y, orientation) {
             if (x < 0 || x >= FledWidth || y < 0 || y >= FledHeight)
                 throw new Error('invalid location');
@@ -1410,13 +1439,9 @@ six tiles... TODO
             return true;
         }
 
-        escape(playerId, discardTileIds) {
+        escape(playerId) {
             const player = this.data.players[playerId];
             player.escaped = true;
-
-            for (const tileId of discardTileIds) {
-                this.discardTile(playerId, tileId);
-            }
         }
 
         isLegalTilePlacement(tileId, x, y, orientation, isStarterBunk = false) {
@@ -1570,7 +1595,7 @@ six tiles... TODO
                 if (item === ItemType.Whistle || item === ItemType.Shamrock) {
                     eligibleTileIds.push(tileId);
                 }
-                else if (toolsNeeded.indexOf(item) >= 0) {
+                else if (toolsNeeded.indexOf(item) >= 0 && !player.inSolitary) {
                     const legalMoves = this.getLegalMovementMoves(tileId);
                     if (legalMoves.length) {
                         eligibleTileIds.push(tileId);
@@ -1661,7 +1686,7 @@ six tiles... TODO
         }
 
         traverseAboveGround(item, xStart, yStart, minDistance, maxDistance) {
-            const result = [];
+            const bestPathByIndex = {};
             const traversals = [];
             const visited = {};
 
@@ -1704,16 +1729,13 @@ six tiles... TODO
                     }
 
                     if (!double || isHead) {
-                        result.push({
+                        bestPathByIndex[index] = {
                             tunnel: false,
                             path,
-                            double,
                             distance,
-                        });
+                        };
                     }
                 }
-
-                // TODO: could adjust directions if this is a double room?
 
                 for (const [ dirString, [ dx, dy ] ] of Object.entries(directions)) {
                     const dir = Number(dirString);
@@ -1729,9 +1751,27 @@ six tiles... TODO
                 }
             }
 
-            return result;
+            return Object.values(bestPathByIndex).map(t => this.collapseDoubleTilesInTraversal(t));
         }
 
+        collapseDoubleTilesInTraversal(traversal) {
+            const { path } = traversal;
+            for (let i = path.length - 1; i > 0; i--) {
+                const [ x, y ] = path[i];
+                const { tileId: thisTileId } = unpackCell(this.getTileAt(x, y));
+                const { tileId: prevTileId } = unpackCell(this.getTileAt(path[i - 1][0], path[i - 1][1]));
+                if (thisTileId === prevTileId && isDoubleTile(thisTileId))
+                {
+                    // Delete the path segment that corresponds to the tail room of the double tile
+                    const headPos = this.getTileHeadPos(x, y);
+                    const indexToDelete = headPos.x == x && headPos.y == y ? i - 1 : i;
+                    path.splice(indexToDelete, 1);
+                    i--; // We just paired two indices... it can't match a third. So skip the next check
+                }
+            }
+            return traversal;
+        }
+    
         getTraversalCost(egress1, egress2, item) {
             if (egress1 === EgressType.None || egress2 === EgressType.None)
                 return 99;
@@ -1757,7 +1797,7 @@ six tiles... TODO
         }
 
         traverseUnderGround(xStart, yStart, maxDistance) {
-            const result = [];
+            const bestPathByIndex = {};
             const visited = {};
             const queue = [
                 { x: xStart, y: yStart, distance: 0 },
@@ -1773,7 +1813,6 @@ six tiles... TODO
                 
                 const room = this.getRoomAt(x, y);
                 if (roomHasTunnel(room) && distance > 0) {
-                    let destination = [ x, y ];
                     let double;
                     let isHead = false;
 
@@ -1789,16 +1828,16 @@ six tiles... TODO
 
                     // Push single rooms and push the head room of double tiles
                     if (!double || isHead) {
-                        result.push({
+                        bestPathByIndex[index] = {
                             tunnel: true,
                             path: [
                                 [ xStart, yStart ],
-                                destination,
+                                [ x, y ],
                             ],
-                            double,
-                        });
+                        };
                     }
                 }
+
                 const thisTileId = this.getTileAt(x, y) % 100;
                 const thisTile = Tiles[thisTileId];
                 for (const [ dx, dy ] of directions) {
@@ -1819,12 +1858,16 @@ six tiles... TODO
                     }
                 }
             }
-            return result;
+            return Object.values(bestPathByIndex).map(t => this.collapseDoubleTilesInTraversal(t));
         }
 
         getHandTilesEligibleForInventory() {
             const eligibleTileIds = [];
             const player = this.data.players[this.myPlayerId];
+
+            // Cannot add any tiles while in solitary confinement
+            if (player.inSolitary) return [];
+
             const hasShamrock = !!player.inventory.find(tileId => Tiles[tileId].contains == ItemType.Shamrock);
 
             // If meeple is in a room that matches rooms shown on the current whistle
@@ -1835,15 +1878,14 @@ six tiles... TODO
             if (rollCallTile[currentRoomType] !== undefined) {
                 // Four is the absolute max capacity; three is the max
                 // if there is no shamrock in the player's inventory.
-                // Nothing can be added if we're at capacity.
+                // No contraband can be added if we're at capacity.
                 const inventoryCount = player.inventory.length;
-                if (inventoryCount === 4 || (inventoryCount === 3 && !hasShamrock))
-                    return [];
-
-                const contraband = rollCallTile[currentRoomType];
-                for (const tileId of player.hand) {
-                    if (Tiles[tileId].contains == contraband)
-                        eligibleTileIds.push(tileId);
+                if (inventoryCount < 3 || (inventoryCount < 4 && hasShamrock)) {
+                    const contraband = rollCallTile[currentRoomType];
+                    for (const tileId of player.hand) {
+                        if (Tiles[tileId].contains == contraband)
+                            eligibleTileIds.push(tileId);
+                    }
                 }
             }
 
@@ -1851,7 +1893,6 @@ six tiles... TODO
             const { chaplain } = this.data.npcs;
             const chaplainPos = chaplain?.pos || [ -1, -1 ];
             const inRoomWithChaplain = chaplainPos[0] == player.pos[0] && chaplainPos[1] == player.pos[1];
-            // TODO: what about double tiles? (maybe have policy that meeple always assigned to head room?)
             if (currentRoomType == RoomType.Quarters || inRoomWithChaplain) {
                 // A Purple tool costs one teal contraband item; a Gold item and a
                 // shamrock each cost two teal contraband items (or one shamrock!)
@@ -1906,22 +1947,6 @@ six tiles... TODO
             const legalMoves = [];
 
             const availableCells = this.findEmptyCellsAdjacentToTiles();
-
-            // TODO: for each available cell, determine which tiles have compatible egress (and can fit in the Opening)
-            // ...for now, we could just put this logic in the client after the user has selected a tile.
-            
-            
-            // TODO: new algorithm:
-            // - find all Open cells with an adjacent occupied cell
-            // - for each Gold tile in hand
-            //     - determine if that tile can be placed there in any orientation
-            // - end for
-            // if Gold matches were found then return the matches
-            // - for each remaining tile in hand
-            //     - determine if that tile can be placed there in any orientation
-            // - end for
-            // if any matches were found then return the matches
-            // return no matches
 
             const orientations = [
                 Orientation.NorthSouth,

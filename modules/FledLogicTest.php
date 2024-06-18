@@ -59,7 +59,12 @@ final class FledLogicTest extends TestCase
         "setup": 0,
         "moves": 0
     }';
-    
+
+    public function setUp(): void
+    {
+        # Turn on error reporting
+        error_reporting(E_ALL);
+    }
 
     public function testTileOnBoard()
     {
@@ -75,11 +80,11 @@ final class FledLogicTest extends TestCase
     {
         $fled = FledLogic::newGame([ 0 => 0, 1 => 1 ], []);
 
-        $fled->placeTile(FLED_TILE_YELLOW_BUNK, 6, 5, FLED_ORIENTATION_WEST_EAST);
+        $fled->placeTile(FLED_TILE_YELLOW_BUNK, 6, 5, FLED_ORIENTATION_WEST_EAST, $moon, $newNpcs);
 
         $this->assertFalse($fled->isGameSetup(), 'Game should not be setup yet');
 
-        $fled->placeTile(FLED_TILE_BLUE_BUNK, 7, 7, FLED_ORIENTATION_EAST_WEST);
+        $fled->placeTile(FLED_TILE_BLUE_BUNK, 7, 7, FLED_ORIENTATION_EAST_WEST, $moon, $newNpcs);
 
         $this->assertTrue($fled->isGameSetup(), 'Game should be setup now');
     }
@@ -88,8 +93,8 @@ final class FledLogicTest extends TestCase
     {
         $fled = FledLogic::newGame([ 10 => FLED_PLAYER_YELLOW, 20 => FLED_PLAYER_BLUE ], []);
 
-        $fled->placeTile(FLED_TILE_YELLOW_BUNK, 6, 5, FLED_ORIENTATION_WEST_EAST);
-        $fled->placeTile(FLED_TILE_BLUE_BUNK, 7, 7, FLED_ORIENTATION_EAST_WEST);
+        $fled->placeTile(FLED_TILE_YELLOW_BUNK, 6, 5, FLED_ORIENTATION_WEST_EAST, $moon, $newNpcs);
+        $fled->placeTile(FLED_TILE_BLUE_BUNK, 7, 7, FLED_ORIENTATION_EAST_WEST, $moon, $newNpcs);
 
         $moves = $fled->getLegalTileMoves();
 
@@ -100,8 +105,8 @@ final class FledLogicTest extends TestCase
     {
         $fled = FledLogic::newGame([ 10 => FLED_PLAYER_YELLOW, 20 => FLED_PLAYER_BLUE ], []);
 
-        $fled->placeTile(FLED_TILE_YELLOW_BUNK, 6, 5, FLED_ORIENTATION_WEST_EAST);
-        $fled->placeTile(FLED_TILE_BLUE_BUNK, 7, 7, FLED_ORIENTATION_EAST_WEST);
+        $fled->placeTile(FLED_TILE_YELLOW_BUNK, 6, 5, FLED_ORIENTATION_WEST_EAST, $moon, $newNpcs);
+        $fled->placeTile(FLED_TILE_BLUE_BUNK, 7, 7, FLED_ORIENTATION_EAST_WEST, $moon, $newNpcs);
 
         $result = $fled->isLegalTilePlacement(45, 9, 6, FLED_ORIENTATION_EAST_WEST);
 
@@ -112,8 +117,8 @@ final class FledLogicTest extends TestCase
     {
         $fled = FledLogic::newGame([ 10 => FLED_PLAYER_YELLOW, 20 => FLED_PLAYER_BLUE ], []);
 
-        $fled->placeTile(FLED_TILE_YELLOW_BUNK, 6, 5, FLED_ORIENTATION_WEST_EAST);
-        $fled->placeTile(FLED_TILE_BLUE_BUNK, 7, 7, FLED_ORIENTATION_EAST_WEST);
+        $fled->placeTile(FLED_TILE_YELLOW_BUNK, 6, 5, FLED_ORIENTATION_WEST_EAST, $moon, $newNpcs);
+        $fled->placeTile(FLED_TILE_BLUE_BUNK, 7, 7, FLED_ORIENTATION_EAST_WEST, $moon, $newNpcs);
 
         $result = $fled->isLegalTilePlacement(4, 6, 4, FLED_ORIENTATION_SOUTH_NORTH);
 
@@ -124,8 +129,8 @@ final class FledLogicTest extends TestCase
     {
         $fled = FledLogic::newGame([ 10 => FLED_PLAYER_YELLOW, 20 => FLED_PLAYER_BLUE ], []);
 
-        $fled->placeTile(FLED_TILE_YELLOW_BUNK, 6, 5, FLED_ORIENTATION_WEST_EAST);
-        $fled->placeTile(FLED_TILE_BLUE_BUNK, 9, 6, FLED_ORIENTATION_EAST_WEST);
+        $fled->placeTile(FLED_TILE_YELLOW_BUNK, 6, 5, FLED_ORIENTATION_WEST_EAST, $moon, $newNpcs);
+        $fled->placeTile(FLED_TILE_BLUE_BUNK, 9, 6, FLED_ORIENTATION_EAST_WEST, $moon, $newNpcs);
 
         $result = $fled->isLegalTilePlacement(4, 10, 6, FLED_ORIENTATION_WEST_EAST);
 
@@ -205,8 +210,8 @@ final class FledLogicTest extends TestCase
     {
         $fled = FledLogic::newGame([ 10 => FLED_PLAYER_YELLOW, 20 => FLED_PLAYER_BLUE ], []);
 
-        $fled->placeTile(FLED_TILE_YELLOW_BUNK, 6, 5, FLED_ORIENTATION_WEST_EAST);
-        $fled->placeTile(FLED_TILE_BLUE_BUNK, 9, 6, FLED_ORIENTATION_EAST_WEST);
+        $fled->placeTile(FLED_TILE_YELLOW_BUNK, 6, 5, FLED_ORIENTATION_WEST_EAST, $moon, $newNpcs);
+        $fled->placeTile(FLED_TILE_BLUE_BUNK, 9, 6, FLED_ORIENTATION_EAST_WEST, $moon, $newNpcs);
 
         $result = $fled->isAdjacentToRoomType(10, 6, FLED_ROOM_BUNK);
 
@@ -266,7 +271,7 @@ final class FledLogicTest extends TestCase
 
         $this->assertFalse($fled->isSafeForRollCall($x, $y), 'Target room should not be considered safe');
 
-        $fled->discardTileToMoveWarder($tileId, $x, $y, 'warder1', $targetPlayerId, $shackleTile, $unshackleTile, $toBunk, $toSolitary, $path);
+        $fled->discardTileToMoveWarder($tileId, $x, $y, 'warder1', $targetPlayerId, $shackleTile, $unshackleTile, $toBunk, $toSolitary, $path, $targetIsSafe);
 
         $this->assertEquals(null, $unshackleTile, 'Should not have been unshackled');
         $this->assertEquals(null, $shackleTile, 'Should not have been shackled (was already shackled)');
@@ -275,7 +280,7 @@ final class FledLogicTest extends TestCase
         $this->assertEquals(1, $fled->getWhistlePosition());
     }
 
-    public function testMove()
+    public function testDoubleMoveFromDoubleTile()
     {
         // I saw this during a game... yellow player was at 6,6 and tried to move north twice with a gold boot
         // movement was rejected by the server.
@@ -316,6 +321,23 @@ final class FledLogicTest extends TestCase
         $this->assertTrue($result, "Player should be able to escape");
     }
 
+    public function testBootDoubleMovementFromDoubleTile()
+    {
+        $fled = FledLogic::fromJson(
+            '{"npcs":{"warder1":{"pos":[5,6]},"warder2":{"pos":[3,7]},"chaplain":{"pos":[9,4]}},"board":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,141,141,129,129,131,131,0,0,0,0,0,0,224,9,101,101,302,302,0,0,0,0,0,0,354,354,224,9,34,146,146,122,122,0,0,0,0,0,0,0,136,136,34,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"moves":33,"order":[2393716,2393715],"setup":1,"options":{"houndExpansion":false,"specterExpansion":false},"players":{"2393715":{"pos":[5,6],"hand":[19,17,4,38,23],"color":1,"escaped":false,"lastTurn":false,"inventory":[5],"inSolitary":false,"placedTile":true,"shackleTile":13,"actionsPlayed":2},"2393716":{"pos":[6,6],"hand":[14,50,45,15],"color":0,"escaped":false,"lastTurn":false,"inventory":[37,11],"inSolitary":false,"placedTile":true,"shackleTile":0,"actionsPlayed":0}},"version":1,"drawPile":[49,56,28,48,10,16,6,18,32,30,21,25,26,40,20,47,33,44,52,53],"rollCall":[1,3,2,0,4],"nextPlayer":0,"openWindow":1,"whistlePos":3,"discardPile":[39,42,35,3,51,27,43],"finalTurnsLeft":null,"governorInventory":[]}'
+        );
+        $playerId = 2393716;
+        $tileId = 15;
+        $x = 7;
+        $y = 4;
+
+        $result = $fled->getLegalMovementMoves($tileId);
+        $traversalsTo_7_4 = array_values(array_filter($result, fn($t) => $t['path'][count($t['path']) - 1] == [ $x, $y ]));
+
+        $this->assertCount(1, $traversalsTo_7_4, "Should have one path to (7, 4)");
+        $this->assertEquals(FLED_TOOL_BOOT, $traversalsTo_7_4[0]['type']);
+    }
+
     public function testSpoonDoubleMovementFromDoubleTile()
     {
         $fled = FledLogic::fromJson(
@@ -326,10 +348,23 @@ final class FledLogicTest extends TestCase
 
         // Green player is at (6, 6) and should be able to reach (9, 2) via tunnel
         $result = $fled->getLegalMovementMoves($tileId);
-        $traversalsTo_9_2 = array_filter($result, fn($t) => array_search([ 9, 2 ], $t['path']) !== false);
+        $traversalsTo_9_2 = array_values(array_filter($result, fn($t) => $t['path'][1] == [ 9, 2 ]));
 
         $this->assertCount(9, $result, "Should have nine possible destinations"); // 9, assuming can't end up where player started
         $this->assertCount(1, $traversalsTo_9_2, "Should have one path to (9, 2)");
-        $this->assertEquals(FLED_TOOL_SPOON, $traversalsTo_9_2['type']);
+        $this->assertEquals(FLED_TOOL_SPOON, $traversalsTo_9_2[0]['type']);
+    }
+
+    public function testEscape()
+    {
+        $fled = FledLogic::fromJson(
+            '{"npcs":{"warder1":{"pos":[8,6]},"warder2":{"pos":[3,1]},"chaplain":{"pos":[4,5]}},"board":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,351,351,0,26,32,0,0,0,0,0,0,0,120,120,40,254,0,26,32,0,0,0,0,0,0,0,114,114,40,254,38,323,323,43,0,0,0,0,0,0,115,115,324,324,38,347,347,43,0,0,0,0,0,0,0,131,131,304,304,102,102,301,301,0,0,0,0,0,0,0,0,0,328,328,146,146,152,152,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"moves":67,"order":[2393715,2393716],"setup":1,"options":{"houndExpansion":false,"specterExpansion":false},"players":{"2393715":{"pos":[5,5],"hand":[9,10,27,48,16],"color":0,"escaped":false,"lastTurn":false,"inventory":[6,33],"inSolitary":false,"placedTile":true,"shackleTile":0,"actionsPlayed":2},"2393716":{"pos":[1,2],"hand":[21,37],"color":1,"escaped":false,"lastTurn":false,"inventory":[13,41,11],"inSolitary":false,"placedTile":true,"shackleTile":0,"actionsPlayed":2}},"version":1,"drawPile":[49,56,25,5,22,44,17,39,50,30,42,19,18,35,12,53],"rollCall":[0,1,2,3,4],"hardLabor":0,"nextPlayer":1,"openWindow":1,"whistlePos":1,"discardPile":[3,34,45],"finalTurnsLeft":1,"governorInventory":[29,36,55]}'
+        );
+        $playerId = 2393716;
+        $discards = [13];
+
+        $result = $fled->discardTilesToEscape($discards);
+
+        $this->assertTrue($result, "Escape should have succeeded");
     }
 }

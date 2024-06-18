@@ -76,13 +76,11 @@ class FledPD extends Table
         // Init game statistics
         //
         $this->initStat('table', 'prison_size', 0);
-        $this->initStat('table', 'warder_count', 1);
         $this->initStat('table', 'whistles_blown', 0);
         $this->initStat('table', 'warder_distance', 0);
         $this->initStat('table', 'chaplain_distance', 0);
         $this->initStat('table', 'hound_distance', 0);
         $this->initStat('table', 'specter_distance', 0);
-        $this->initStat('table', 'governors_inventory_max', 0);
         $this->initStat('table', 'confiscations', 0);
         $this->initStat('table', 'items_surrendered', 0);
         $this->initStat('table', 'items_from_governor', 0);
@@ -102,7 +100,6 @@ class FledPD extends Table
         $this->initStat('player', 'tools_used_single', 0);
         $this->initStat('player', 'tools_used_double', 0);
         $this->initStat('player', 'escaped', 0);
-        $this->initStat('player', 'opponent_escaped', 0);
         $this->initStat('player', 'traversed_window', 0);
         $this->initStat('player', 'traversed_door', 0);
         $this->initStat('player', 'traversed_archway', 0);
@@ -243,13 +240,6 @@ class FledPD extends Table
 
     function afterDiscardTile(FledLogic $fled, $activePlayerId, $tileId)
     {
-        // TODO: update internal game state
-
-        //
-        // Update the player stats
-        //
-        // TODO: increment tiles discarded (maybe differentiate due to being unplayable)
-
         //
         // Send notifications to players
         //
@@ -317,9 +307,7 @@ class FledPD extends Table
         //
         // Send notifications to players
         //
-        $this->notifyAllPlayers('tilePlayed', clienttranslate('${playerName} adds ${_tile} to the prison'), [
-            'i18n' => [ '_tile' ],
-            '_tile' => clienttranslate('a tile'),
+        $this->notifyAllPlayers('tilePlayed', clienttranslate('${playerName} adds a tile to the prison'), [
             'playerName' => $this->getPlayerNameById($activePlayerId),
             'playerId' => $activePlayerId,
             'tile' => $tileId,
@@ -338,8 +326,6 @@ class FledPD extends Table
 
         foreach ($newNpcs as $name => $npc)
         {
-            $this->incStat(1, 'warder_count');
-
             $this->notifyAllPlayers('npcAdded', clienttranslate('${_npc} has been added to the prison at (${x}, ${y})'), [
                 'i18n' => [ '_npc' ],
                 '_npc' => $npcDisplayLabel[$name],
@@ -359,7 +345,7 @@ class FledPD extends Table
             ]);
         }
 
-        $this->gamestate->nextState('');
+        $this->gamestate->nextState('nextPhase');
     }
 
     function action_move($tileId, $x, $y)
@@ -406,16 +392,15 @@ class FledPD extends Table
         //
         $tile = FledLogic::$FledTiles[$tileId];
         $itemId = $tile['contains'];
-        $this->notifyAllPlayers('tilePlayedToMove', clienttranslate('${playerName} plays ${_item} to move to (${x}, ${y})'), [
-            'i18n' => [ '_item' ],
-            '_item' => $this->Items[$itemId]['one'],
-            'item' => $itemId,
+        $this->notifyAllPlayers('tilePlayedToMove', clienttranslate('${playerName} plays ${_tile} to move to (${x}, ${y})'), [
+            'i18n' => [ '_tile' ],
+            '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
             'playerName' => $this->getPlayerNameById($activePlayerId),
             'playerId' => $activePlayerId,
             'tile' => $tileId,
             'x' => $x,
             'y' => $y,
-            'preserve' => [ 'playerId', 'tile', 'item' ],
+            'preserve' => [ 'playerId', 'tile' ],
         ]);
 
         $this->afterAction($fled);
@@ -453,9 +438,6 @@ class FledPD extends Table
         $distance = count($path) - 1;
         $this->incStat($distance, 'warder_distance');
 
-        $inventoryMax = max($fled->countGovernorInventory(), $this->getStat('governors_inventory_max'));
-        $this->setStat($inventoryMax, 'governors_inventory_max');
-
         if ($toBunk)
             $this->incStat(1, 'confiscations');
 
@@ -473,14 +455,22 @@ class FledPD extends Table
         //
         // Notify Players
         //
-        $this->notifyAllPlayers('tilePlayedToMoveWarder', clienttranslate('${playerName} plays ${_tile} to move ${_npc} to (${x}, ${y})'), [
+        $msg =
+            $targetPlayerId
+                ? clienttranslate('${playerName} plays ${_tile} to move ${_npc} to ${targetName} at (${x}, ${y})')
+                : clienttranslate('${playerName} plays ${_tile} to move ${_npc} to (${x}, ${y})');
+
+        $tile = FledLogic::$FledTiles[$tileId];
+        $itemId = $tile['contains'];
+        $this->notifyAllPlayers('tilePlayedToMoveWarder', $msg, [
             'i18n' => [ '_tile', '_npc' ],
-            '_tile' => _('a tile'),
+            '_tile' => $this->Items[$itemId]['one'],
             '_npc' =>
                 $w == 'chaplain'
                     ? _('the chaplain')
                     : _('a warder'),
             'playerName' => $this->getPlayerNameById($activePlayerId),
+            'targetName' => $targetPlayerId ? $this->getPlayerNameById($targetPlayerId) : null,
             'playerId' => $activePlayerId,
             'tile' => $tileId,
             'npc' => $w,
@@ -526,12 +516,15 @@ class FledPD extends Table
 
         if ($unshackleTile)
         {
-            $this->notifyAllPlayers('unshackled', clienttranslate('${playerName} is <b>unshackled</b>'), [
-                'playerName' => $this->getPlayerNameById($targetPlayerId),
-                'playerId' => $targetPlayerId,
-                'tileId' => $unshackleTile,
-                'score' => $fled->getPlayerScore($targetPlayerId),
-                'preserve' => [ 'playerId', 'tileId', 'score' ],
+            $tile = FledLogic::$FledTiles[$unshackleTile];
+            $itemId = $tile['contains'];
+            $this->notifyAllPlayers('unshackled', clienttranslate('${playerName} is <b>unshackled</b>; ${_tile} surrendered to Governor\'s Inventory.'), [
+                'playerName' => $this->getPlayerNameById($playerId),
+                'playerId' => $playerId,
+                '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
+                'tile' => $unshackleTile,
+                'score' => $fled->getPlayerScore($playerId),
+                'preserve' => [ 'playerId', 'tile', 'score' ],
             ]);
         }
 
@@ -547,9 +540,10 @@ class FledPD extends Table
         if ($targetIsSafe)
         {
             $roomType = $fled->getRoomTypeAt($x, $y);
-            $this->notifyAllPlayers('playerSafe', clienttranslate('${playerName} is <b>safe</b> in the ${_room}'), [
+            $this->notifyAllPlayers('playerSafe', clienttranslate('${playerName} is <b>safe</b> in ${_room}'), [
                 'i18n' => [ '_room' ],
-                '_room' => $this->RoomTypeLabels[$roomType],
+                'playerName' => $this->getPlayerNameById($targetPlayerId),
+                '_room' => $this->RoomTypeLabels[$roomType]['the'],
                 'room' => $roomType,
                 'preserve' => [ 'room' ],
             ]);
@@ -560,8 +554,8 @@ class FledPD extends Table
         {
             $this->notifyAllPlayers('whistleMoved', clienttranslate('Prisoners caught outside of ${_room0} and ${_room1} will be in trouble!'), [
                 'i18n' => [ '_room0', '_room1' ],
-                '_room0' => $this->RoomTypeLabels[$safeRoomTypes[0]],
-                '_room1' => $this->RoomTypeLabels[$safeRoomTypes[1]],
+                '_room0' => $this->RoomTypeLabels[$safeRoomTypes[0]]['plural'],
+                '_room1' => $this->RoomTypeLabels[$safeRoomTypes[1]]['plural'],
                 'room0' => $safeRoomTypes[0],
                 'room1' => $safeRoomTypes[1],
                 'playerId' => $activePlayerId,
@@ -572,7 +566,7 @@ class FledPD extends Table
         {
             $this->notifyAllPlayers('whistleMoved', clienttranslate('Prisoners caught outside of ${_room} will be in trouble!'), [
                 'i18n' => [ '_room' ],
-                '_room' => $this->RoomTypeLabels[$safeRoomTypes[0]],
+                '_room' => $this->RoomTypeLabels[$safeRoomTypes[0]]['plural'],
                 'room' => $safeRoomTypes[0],
                 'playerId' => $activePlayerId,
                 'preserve' => [ 'room', 'playerId' ],
@@ -616,21 +610,21 @@ class FledPD extends Table
 
         // Update player score in database
         $score = $fled->getPlayerScore($activePlayerId);
-        $this->setPlayerScore($activePlayerId, $score, 0);
+        $auxScore = $fled->getPlayerAuxScore($activePlayerId);
+        $this->setPlayerScore($activePlayerId, $score, $auxScore);
 
         $this->notify_inventoryDiscarded($fled, $activePlayerId, $discards);
 
         $tile = FledLogic::$FledTiles[$tileId];
         $itemId = $tile['contains'];
-        $this->notifyAllPlayers('tileAddedToInventory', clienttranslate('${playerName} gains ${_item}'), [
-            'i18n' => [ '_item' ],
+        $this->notifyAllPlayers('tileAddedToInventory', clienttranslate('${playerName} gains ${_tile}'), [
+            'i18n' => [ '_tile' ],
             'playerName' => $this->getPlayerNameById($activePlayerId),
             'playerId' => $activePlayerId,
-            '_item' => $this->Items[$itemId]['one'],
-            'item' => $itemId,
-            'tileId' => $tileId,
+            '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
+            'tile' => $tileId,
             'score' => $score,
-            'preserve' => [ 'playerId', 'item', 'tileId', 'score' ],
+            'preserve' => [ 'playerId', 'tileId', 'score' ],
         ]);
 
         $this->afterAction($fled);
@@ -667,18 +661,17 @@ class FledPD extends Table
         //
         // Update the table and player stats
         //
-        $inventoryMax = max($fled->countGovernorInventory(), $this->getStat('governors_inventory_max'));
-        $this->setStat($inventoryMax, 'governors_inventory_max');
-
         $this->incStat(1, 'items_surrendered');
         $this->incStat(1, 'items_surrendered', $activePlayerId);
 
         //
         // Send notifications to players
         //
+        $tile = FledLogic::$FledTiles[$tileId];
+        $itemId = $tile['contains'];
         $this->notifyAllPlayers('tileSurrendered', clienttranslate('${playerName} surrenders ${_tile} to the Governor'), [
             'i18n' => [ '_tile' ],
-            '_tile' => clienttranslate('a tile'),
+            '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
             'playerName' => $this->getPlayerNameById($activePlayerId),
             'playerId' => $activePlayerId,
             'tile' => $tileId,
@@ -717,15 +710,13 @@ class FledPD extends Table
         //
         $this->incStat(1, 'escaped');
         $this->setStat(1, 'escaped', $activePlayerId);
-        foreach ($fled->getPlayerIds() as $playerId)
-            if ($playerId != $activePlayerId)
-                $this->incStat(1, 'opponent_escaped', $playerId);
 
         //
         // Update player score in database
         //
-        $score = $fled->getPlayerScore($playerId);
-        $this->setPlayerScore($playerId, $score, 0);
+        $score = $fled->getPlayerScore($activePlayerId);
+        $auxScore = $fled->getPlayerAuxScore($activePlayerId);
+        $this->setPlayerScore($activePlayerId, $score, $auxScore);
 
         //
         // Send notifications to players
@@ -736,8 +727,7 @@ class FledPD extends Table
             'playerName' => $this->getPlayerNameById($activePlayerId),
             'playerId' => $activePlayerId,
             'score' => $score,
-            'discards' => $discards,
-            'preserve' => [ 'playerId', 'score', 'discards' ],
+            'preserve' => [ 'playerId', 'score' ],
         ]);
 
         // Skip the draw phase and immediately go to the next player.
@@ -782,10 +772,14 @@ class FledPD extends Table
         //
         if ($governorTileId)
         {
-            $this->notifyAllPlayers('tookFromGovernor', clienttranslate('${playerName} takes a tile from the Governor\'s inventory'), [
+            $tile = FledLogic::$FledTiles[$governorTileId];
+            $itemId = $tile['contains'];
+                $this->notifyAllPlayers('tookFromGovernor', clienttranslate('${playerName} takes ${_tile} from the Governor\'s inventory'), [
+                'i18n' => [ '_tile' ],
+                '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
                 'playerName' => $this->getPlayerNameById($activePlayerId),
                 'playerId' => $activePlayerId,
-                'tileId' => $governorTileId,
+                'tile' => $governorTileId,
                 'preserve' => [ 'playerId', 'tileId' ],
             ]);
         }
@@ -823,7 +817,7 @@ class FledPD extends Table
 
         if (count($drawnAfterShuffle))
         {
-            $this->notifyAllPlayers('shuffled', clienttranslate('Discards shuffled into new draw pile (<b>${n} tiles remain</b>)'), [
+            $this->notifyAllPlayers('shuffled', clienttranslate('Shuffling new draw pile (<b>${n} tiles remain</b>)'), [
                 'n' => $drawPileSize + count($drawnAfterShuffle),
             ]);
 
@@ -871,36 +865,38 @@ class FledPD extends Table
         {
             $tile1 = FledLogic::$FledTiles[$discards[0]];
             $itemId1 = $tile1['contains'];
+            $color1 = $tile1['color'];
 
             $itemsParams = [];
             if ($discards == 2)
             {
                 $tile2 = FledLogic::$FledTiles[$discards[1]];
                 $itemId2 = $tile2['contains'];
+                $color2 = $tile2['color'];
 
-                if ($itemId1 == $itemId2)
+                if ($itemId1 == $itemId2 && $color1 === $color2)
                 {
                     $itemsParams = [
-                        'log' => '${_item1}${_item2}',
+                        'log' => '${_tile1}${_tile2}',
                         'args' => [
-                            'i18n' => [ '_item1', '_item2' ],
-                            '_item1' => $this->Items[$itemId1]['two'],
-                            '_item2' => '',
-                            'item1' => $itemId1,
-                            'item2' => $itemId2,
+                            'i18n' => [ '_tile1', '_tile2' ],
+                            '_tile1' => $tile1['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId1]['two double'] : $this->Items[$itemId1]['two'],
+                            '_tile2' => '',
+                            'tile1' => $tile1,
+                            'tile2' => $tile2,
                         ],
                     ];
                 }
                 else
                 {
                     $itemsParams = [
-                        'log' => '${_item1}${_item2}',
+                        'log' => '${_tile1} and ${_tile2}',
                         'args' => [
-                            'i18n' => [ '_item1', '_item2' ],
-                            '_item1' => $this->Items[$itemId1]['one'],
-                            '_item2' => $this->Items[$itemId1]['one'],
-                            'item1' => $itemId1,
-                            'item2' => $itemId2,
+                            'i18n' => [ '_tile1', '_tile2' ],
+                            '_tile1' => $tile1['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId1]['double'] : $this->Items[$itemId1]['one'],
+                            '_tile2' => $tile2['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId2]['double'] : $this->Items[$itemId2]['one'],
+                            'tile1' => $itemId1,
+                            'tile2' => $itemId2,
                         ],
                     ];
                 }
@@ -908,11 +904,11 @@ class FledPD extends Table
             else
             {
                 $itemsParams = [
-                    'log' => '${_item1}',
+                    'log' => '${_tile1}',
                     'args' => [
-                        'i18n' => [ '_item1' ],
-                        '_item1' => $this->Items[$itemId1]['one'],
-                        'item1' => $itemId1,
+                        'i18n' => [ '_tile1' ],
+                        '_tile1' => $tile1['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId1]['double'] : $this->Items[$itemId1]['one'],
+                        'tile1' => $itemId1,
                     ],
                 ];
             }
@@ -975,12 +971,15 @@ class FledPD extends Table
                 'preserve' => [ 'playerId' ],
             ]);
 
-            $this->notifyAllPlayers('unshackled', clienttranslate('${playerName} is <b>unshackled</b>'), [
+            $tile = FledLogic::$FledTiles[$unshackleTile];
+            $itemId = $tile['contains'];
+            $this->notifyAllPlayers('unshackled', clienttranslate('${playerName} is <b>unshackled</b>; ${_tile} surrendered to Governor\'s Inventory.'), [
                 'playerName' => $this->getPlayerNameById($playerId),
                 'playerId' => $playerId,
-                'tileId' => $unshackleTile,
+                '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
+                'tile' => $unshackleTile,
                 'score' => $fled->getPlayerScore($playerId),
-                'preserve' => [ 'playerId', 'tileId', 'score' ],
+                'preserve' => [ 'playerId', 'tile', 'score' ],
             ]);
 
             $playerId = $fled->getNextPlayerId();

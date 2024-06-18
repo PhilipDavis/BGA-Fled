@@ -1193,6 +1193,12 @@ six tiles... TODO
         return FledLogic::$FledTiles[$tileId % 100]['color'];
     }
 
+    public static function getTileScore($tileId)
+    {
+        // Note: the tile score is the same as the color value
+        return FledLogic::$FledTiles[$tileId % 100]['color'];
+    }
+
     public static function roomHasTunnel($room)
     {
         if (!$room) return false;
@@ -1204,7 +1210,7 @@ six tiles... TODO
 
     public static function isDoubleTile($tileId)
     {
-        switch ($tileId)
+        switch ($tileId % 100)
         {
             case FLED_TILE_SOLITARY_CONFINEMENT:
             case FLED_TILE_CHAPEL:
@@ -1569,7 +1575,7 @@ six tiles... TODO
         $toolNeeded = $tile['rooms'][1]['escape'];
         $isNight = $this->data->whistlePos == $this->data->openWindow;
         $toolsRemaining = $isNight ? 1 : 2;
-    
+
         foreach ($discards as $tileId)
         {
             $item = $this->getTileItem($tileId);
@@ -1582,8 +1588,8 @@ six tiles... TODO
             else
                 $toolsRemaining--;
         }
-
-        if ($toolsRemaining !== 0)
+    
+        if ($toolsRemaining > 0)
             return false;
 
         // Remove the discard tiles from the player's inventory
@@ -1903,8 +1909,6 @@ six tiles... TODO
         if ($this->getTileAt($x2, $y2))
             return false;
 
-        FledLogic::debugPrint('HERE');
-
         // The starter bunk tile must have the corridor room adjacent to the yard.
         if ($isStarterBunk)
         {
@@ -2074,8 +2078,13 @@ six tiles... TODO
         {
             $tile = FledLogic::$FledTiles[$tileId];
             $item = $tile['contains'];
-            if (array_search($item, $toolsNeeded) !== false || $item === FLED_WHISTLE)
-                $eligibleTileIds[$tileId] = $this->getLegalMovementMoves($tileId);
+            if ($item === FLED_WHISTLE || $item === FLED_SHAMROCK)
+                $eligibleTileIds[] = $tileId;
+            else if (array_search($item, $toolsNeeded) !== false && !$player->inSolitary)
+            {
+                if (count($this->getLegalMovementMoves($tileId)))
+                    $eligibleTileIds[] = $tileId;
+            }
         }
 
         return $eligibleTileIds;
@@ -2160,6 +2169,10 @@ six tiles... TODO
         $room = $this->getRoomAt($x, $y);
         $item = $tile['contains'];
 
+        // Cannot move at all if the player is in the Hole
+        if ($this->isPlayerInSolitary($playerId))
+            return [];
+
         $paths = [];
         if (FledLogic::roomHasTunnel($room) && ($item === FLED_TOOL_SPOON || $item === FLED_SHAMROCK)) {
             // Each spoon lets player move 3 rooms
@@ -2172,7 +2185,7 @@ six tiles... TODO
     }
 
     public function traverseAboveGround($item, $xStart, $yStart, $minDistance, $maxDistance) {
-        $result = [];
+        $bestPathByIndex = [];
         $traversals = [];
         $visited = [];
 
@@ -2201,32 +2214,14 @@ six tiles... TODO
             $x = $path[count($path) - 1][0];
             $y = $path[count($path) - 1][1];
             $index = FledLogic::makeIndex($x, $y);
-            if (array_key_exists($index, $visited)) continue;
-            $visited[$index] = true;
+            if (array_key_exists($index, $visited) && $visited[$index] <= $distance) continue;
+            $visited[$index] = $distance;
 
             if ($distance >= $minDistance) {
-                $double = false;
-                $isHead = false;
-
-                // Is this tile a double tile? Add the head room only
-                // (unless it's already been added)
-                $tileId = $this->getTileAt($x, $y) % 100;
-                $rooms = FledLogic::$FledTiles[$tileId]['rooms'];
-                if ($rooms[0]['type'] === $rooms[1]['type']) {
-                    $headPos = $this->getTileHeadPos($x, $y);
-                    array_pop($path);
-                    array_push($path, $headPos);
-                    $double = true;
-                    $isHead = $headPos[0] === $x && $headPos[1] === $y;
-                }
-
-                if (!$double || $isHead) {
-                    $result[] = [
-                        'path' => $path,
-                        'double' => $double,
-                        'type' => $traversal['type'],
-                    ];
-                }
+                $bestPathByIndex[$index] = [
+                    'path' => $path,
+                    'type' => $traversal['type'],
+                ];
             }
 
             foreach ($directions as $dir => $delta)
@@ -2245,7 +2240,30 @@ six tiles... TODO
                 }
             }
         }
-        return $result;
+
+        return array_values(array_map(fn($path) => $this->collapseDoubleTilesInTraversal($path), $bestPathByIndex));
+    }
+
+    public function collapseDoubleTilesInTraversal($traversal)
+    {
+        $path = $traversal['path'];
+        for ($i = count($path) - 1; $i > 0; $i--)
+        {
+            $x = $path[$i][0];
+            $y = $path[$i][1];
+            $thisTileId = $this->getTileAt($x, $y) % 100;
+            $prevTileId = $this->getTileAt($path[$i - 1][0], $path[$i - 1][1]) % 100;
+            if ($thisTileId === $prevTileId && FledLogic::isDoubleTile($thisTileId))
+            {
+                // Delete the path segment that corresponds to the tail room of the double tile
+                $headPos = $this->getTileHeadPos($x, $y);
+                $indexToDelete = $headPos[0] == $x && $headPos[1] == $y ? $i - 1 : $i;
+                array_splice($path, $indexToDelete, 1);
+                $i--; // We just paired two indices... it can't match a third. So skip the next check
+            }
+        }
+        $traversal['path'] = $path;
+        return $traversal;
     }
 
     public function getTraversalCost($egress1, $egress2, $item, &$effectiveItem)
@@ -2282,7 +2300,7 @@ six tiles... TODO
 
     public function traverseUnderGround($xStart, $yStart, $maxDistance)
     {
-        $result = [];
+        $bestPathByIndex = [];
         $visited = [];
         $queue = [
             [
@@ -2324,12 +2342,11 @@ six tiles... TODO
                 // Push single rooms and push the head room of double tiles
                 if (!$double || $isHead)
                 {
-                    $result[] = [
+                    $bestPathByIndex[$index] = [
                         'path' => [
                             [ $xStart, $yStart ],
                             $destination,
                         ],
-                        'double' => $double,
                         'type' => FLED_TOOL_SPOON,
                     ];
                 }
@@ -2357,18 +2374,20 @@ six tiles... TODO
                 }
             }
         }
-        return $result;
+
+        return array_values(array_map(fn($path) => $this->collapseDoubleTilesInTraversal($path), $bestPathByIndex));
     }
 
     public function getHandTilesEligibleForInventory()
     {
         $eligibleTileIds = [];
 
-        // TODO: given the current player's current hand, inventory and position, the position of the whistle, and position of the chaplain,
-        // what tiles can the player add to inventory?
-
         $playerId = $this->getNextPlayerId();
         $player = $this->data->players->$playerId;
+
+        if ($player->inSolitary) return [];
+
+        $contrabandInInventory = count(array_filter($player->inventory, fn($tileId) => FledLogic::$FledTiles[$tileId]['color'] == FLED_COLOR_BLUE));
         $hasShamrock = count(array_filter($player->inventory, fn($tileId) => FledLogic::$FledTiles[$tileId]['contains'] == FLED_SHAMROCK)) > 0;
 
         // If meeple is in a room that matches rooms shown on the current whistle
@@ -2380,15 +2399,15 @@ six tiles... TODO
         {
             // Four is the absolute max capacity; three is the max
             // if there is no shamrock in the player's inventory.
-            // Nothing can be added if we're at capacity.
+            // No contraband can be added if we're at capacity.
             $inventoryCount = count($player->inventory);
-            if ($inventoryCount === 4 || ($inventoryCount === 3 && !$hasShamrock))
-                return [];
-
-            $contraband = $rollCallTile[$currentRoomType];
-            foreach ($player->hand as $tileId)
-                if (FledLogic::$FledTiles[$tileId]['contains'] == $contraband)
-                    $eligibleTileIds[] = $tileId;
+            if ($inventoryCount < 3 || ($inventoryCount < 4 && $hasShamrock))
+            {
+                $contraband = $rollCallTile[$currentRoomType];
+                foreach ($player->hand as $tileId)
+                    if (FledLogic::$FledTiles[$tileId]['contains'] == $contraband)
+                        $eligibleTileIds[] = $tileId;
+            }
         }
 
         // If meeple is in a Warder's Quarters or same room as the Chaplain...
@@ -2396,9 +2415,8 @@ six tiles... TODO
         $withChaplain = $this->isInSameRoom($chaplainPos, $player->pos);
         if ($currentRoomType == FLED_ROOM_QUARTERS || $withChaplain)
         {
-            // A purple tool costs one teal contraband item; a gold item and a
-            // shamrock each cost two teal contraband items (or one shamrock!)
-            $contrabandInInventory = count(array_filter($player->inventory, fn($tileId) => FledLogic::$FledTiles[$tileId]['color'] == FLED_COLOR_BLUE));
+            // A purple tool costs one teal contraband item; a gold item
+            // and a shamrock each cost two teal contraband items
             if ($contrabandInInventory >= 1)
             {
                 foreach ($player->hand as $tileId)
@@ -2458,22 +2476,6 @@ six tiles... TODO
             }
         }
         $availableCells = array_map(fn($index) => FledLogic::parseIndex($index), array_keys($availableCells));
-
-        // TODO: for each available cell, determine which tiles have compatible egress (and can fit in the opening)
-        // ...for now, we could just put this logic in the client after the user has selected a tile.
-        
-        
-        // TODO: new algorithm:
-        // - find all open cells with an adjacent occupied cell
-        // - for each gold tile in hand
-        //     - determine if that tile can be placed there in any orientation
-        // - end for
-        // if gold matches were found then return the matches
-        // - for each remaining tile in hand
-        //     - determine if that tile can be placed there in any orientation
-        // - end for
-        // if any matches were found then return the matches
-        // return no matches
 
         $orientations = [
             FLED_ORIENTATION_NORTH_SOUTH,
@@ -2637,6 +2639,16 @@ six tiles... TODO
         return $sum;
     }
 
+    public function getPlayerAuxScore($playerId)
+    {
+        // Tie breaker is the highest value tile in inventory (not in hand) -- includes flipped prisoner tile & shackle tile
+        $player = $this->data->players->$playerId;
+        if ($player->escaped)
+            return 5;
+        $initial = $player->shackleTile ? -1 : 0;
+        return array_reduce($player->inventory, fn($max, $tileId) => max($max, FledLogic::getTileScore($tileId)), $initial);
+    }
+
     public function getScores()
     {
         $scores = [];
@@ -2668,17 +2680,6 @@ six tiles... TODO
     public function getMoveCount()
     {
         return $this->data->moves;
-    }
-
-    public function getTieBreakerScores()
-    {
-        $playerScores = array_map(function($player) {
-            $sum = 0;
-            // TODO
-            return $sum;
-        }, (array)$this->data->players);
-        
-        return $playerScores;
     }
 
     // Return only the public data and the data private to the given player 
