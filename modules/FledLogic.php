@@ -1490,7 +1490,7 @@ six tiles... TODO
             }
             else if ($moon)
             {
-                $nextWarder = array_key_exists('warder2', $this->data->npcs) ? 'warder3' : 'warder2';
+                $nextWarder = array_key_exists('warder2', (array)$this->data->npcs) ? 'warder3' : 'warder2';
                 $this->data->npcs->$nextWarder = (object)[
                     'pos' => [ $x, $y ],
                 ];

@@ -3334,7 +3334,9 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
         },
 
         async onClickConfirmWarderMovement() {
-            if (this.currentState !== 'client_confirmWarderMovement') return;
+            if (this.currentState !== 'client_confirmWarderMovement' &&
+                this.currentState !== 'client_selectWarderDestination' &&
+                this.currentState !== 'client_selectPlayerToTarget') return;
             const t = this.clientStateArgs.selectedTileId;
             let { x, y } = this.clientStateArgs.selectedCoords;
             const w = this.clientStateArgs.selectedWarder;

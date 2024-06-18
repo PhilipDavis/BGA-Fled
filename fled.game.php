@@ -519,11 +519,12 @@ class Fled extends Table
             $tile = FledLogic::$FledTiles[$unshackleTile];
             $itemId = $tile['contains'];
             $this->notifyAllPlayers('unshackled', clienttranslate('${playerName} is <b>unshackled</b>; ${_tile} surrendered to Governor\'s Inventory.'), [
-                'playerName' => $this->getPlayerNameById($playerId),
-                'playerId' => $playerId,
+                'i18n' => [ '_tile' ],
+                'playerName' => $this->getPlayerNameById($targetPlayerId),
+                'playerId' => $targetPlayerId,
                 '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
                 'tile' => $unshackleTile,
-                'score' => $fled->getPlayerScore($playerId),
+                'score' => $fled->getPlayerScore($targetPlayerId),
                 'preserve' => [ 'playerId', 'tile', 'score' ],
             ]);
         }
