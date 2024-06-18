@@ -13,7 +13,7 @@ require_once(APP_GAMEMODULE_PATH.'module/table/table.game.php');
 require_once('modules/FledLogic.php');
 
 
-class FledPD extends Table
+class Fled extends Table
 {
 	function __construct()
 	{
@@ -29,7 +29,7 @@ class FledPD extends Table
     protected function getGameName()
     {
 		// Used for translations and stuff. Please do not modify.
-        return "fledpd";
+        return "fled";
     }	
 
     //

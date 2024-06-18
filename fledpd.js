@@ -17,7 +17,7 @@ define([
     "ebg/counter",
 ],
 function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFactory }) {
-    const BgaGameId = `fledpd`;
+    const BgaGameId = `fled`;
     const BasePath = `${BgaGameId}/${BgaGameId}`;
 
     let fled; //: FledLogic

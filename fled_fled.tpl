@@ -24,7 +24,7 @@
 
 <script type="text/javascript">
 
-const fledpd_Templates = {
+const fled_Templates = {
     miniMap:
         '<div id="fled_minimap">' +
             '<div id="fled_minimap-focus"></div>' +
@@ -132,7 +132,7 @@ const fledpd_Templates = {
             'style="transform: translate(${X_EM}em, ${Y_EM}em) rotateZ(${DEG}deg) scale(1.5);" '+
         '></div>',
 
-    tileLog:
+    tileLog: // TODO: use this for scrolls... need new CSS rules for each tile
         '<span class="fled_log-tile fled_log-tile-${DATA}"></span>',
 
     moonLog:
@@ -156,7 +156,7 @@ const fledpd_Templates = {
             '<path fill="#fff" d="M50, 50 L50,0 A50,50 0 1 0 51,0 Z"></path></svg>' +
         '</svg>',
 };
-const fled_Templates = fledpd_Templates;
+const fled_Templates = fled_Templates;
 
 
 </script>  

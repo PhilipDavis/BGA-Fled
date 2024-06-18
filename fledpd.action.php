@@ -9,7 +9,7 @@
  * -----
  */
 
-class action_fledpd extends APP_GameAction
+class action_fled extends APP_GameAction
 { 
     // Constructor: please do not modify
    	public function __default()
@@ -21,7 +21,7 @@ class action_fledpd extends APP_GameAction
   	    }
   	    else
   	    {
-            $this->view = 'fledpd_fledpd';
+            $this->view = 'fled_fled';
             self::trace('Complete reinitialization of board game');
         }
   	}

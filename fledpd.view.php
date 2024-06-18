@@ -11,12 +11,12 @@
   
 require_once(APP_BASE_PATH."view/common/game.view.php");
   
-class view_fledpd_fledpd extends game_view
+class view_fled_fled extends game_view
 {
     protected function getGameName()
     {
         // Used for translations and stuff. Please do not modify.
-        return "fledpd";
+        return "fled";
     }
     
   	function build_page($viewArgs)
