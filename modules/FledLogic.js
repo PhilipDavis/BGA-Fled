@@ -1442,6 +1442,11 @@ six tiles... TODO
         escape(playerId) {
             const player = this.data.players[playerId];
             player.escaped = true;
+
+            if (this.data.finalTurns === null) {
+                this.data.finalTurns = this.data.order.length;
+            }
+            // Note: the value will be decremented soon via the endTurn event handler
         }
 
         isLegalTilePlacement(tileId, x, y, orientation, isStarterBunk = false) {
@@ -2044,14 +2049,11 @@ six tiles... TODO
             fled.players[playerId].inSolitary = true;
         }
 
-        unshacklePlayer(playerId) {
+        unshacklePlayer(playerId, tileId) {
             const player = this.players[playerId];
-            const { shackleTile } = player;
             player.shackleTile = null;
 
-            if (shackleTile) {
-                this.addTileToGovernorInventory(shackleTile);
-            }
+            this.addTileToGovernorInventory(tileId);
         }
 
         canEscape() {
@@ -2059,6 +2061,25 @@ six tiles... TODO
             return this.canEscapeWith(player.inventory);
         }
     
+        calculateToolsNeededToEscape()
+        {
+            const player = this.data.players[this.myPlayerId];
+            const [ x, y ] = player.pos;
+            if (x != 1 && x != FledWidth - 2 && y != 1 && y != FledHeight - 2) {
+                return [];
+            }
+    
+            const { tileId } = unpackCell(this.getTileAt(x, y));
+            const tile = Tiles[tileId];
+            if (tile.rooms[0].type !== RoomType.Forest)
+                return [];
+            const toolNeeded = tile.rooms[1].escape; // Forest is always in the head room
+            const isNight = this.data.whistlePos == this.data.openWindow;
+            return isNight
+                ? [ toolNeeded ]
+                : [ toolNeeded, toolNeeded ];
+        }
+
         canEscapeWith(tileIds) {
             const player = this.data.players[this.myPlayerId];
             const [ x, y ] = player.pos;
@@ -2167,6 +2188,12 @@ six tiles... TODO
             return this.data.moves;
         }
 
+        endTurn() {
+            if (this.data.finalTurns !== null) {
+                this.data.finalTurns--;
+            }
+        }
+
         toJson() {
             return JSON.stringify(data);
         }
@@ -2189,7 +2216,7 @@ six tiles... TODO
         }
 
         get isLastTurn() {
-            return Object.values(this.data.players).some(p => p.escaped) && this.data.finalTurnsLeft > 0;
+            return Object.values(this.data.players).some(p => p.escaped) && this.data.finalTurns > 0;
         }
 
         get isSetup() {

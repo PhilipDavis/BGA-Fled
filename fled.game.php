@@ -11,9 +11,10 @@
 
 require_once(APP_GAMEMODULE_PATH.'module/table/table.game.php');
 require_once('modules/FledLogic.php');
+require_once('modules/FledEvents.php');
 
 
-class Fled extends Table
+class Fled extends Table implements FledEvents
 {
 	function __construct()
 	{
@@ -114,7 +115,7 @@ class Fled extends Table
             'houndExpansion' => false, // TODO
         ];
         
-        $fled = FledLogic::newGame($playerColorIndices, $fledOptions);
+        $fled = FledLogic::newGame($playerColorIndices, $fledOptions, $this);
         $this->initializeGameState($fled);
 
         // Must set the first active player
@@ -160,7 +161,7 @@ class Fled extends Table
     protected function loadGameState()
     {
         $json = $this->getObjectFromDB("SELECT id, doc FROM game_state LIMIT 1")['doc'];
-        return FledLogic::fromJson($json);
+        return FledLogic::fromJson($json, $this);
     }
 
     protected function saveGameState($fled)
@@ -222,31 +223,41 @@ class Fled extends Table
         $playerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
-        if (!$fled->discardTile($tileId))
+        try
+        {
+            $fled->discardTile($tileId);
+        }
+        catch (Throwable $e)
         {
             $refId = uniqid();
             self::trace(implode(', ', [
                 'Ref #' . $refId . ': discard failed',
                 'player: ' . $playerId,
                 'tileId: ' . $tileId,
-                'state: ' . $fled->toJson()
+                'state: ' . $fled->toJson(),
+                'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
         }
         $this->saveGameState($fled);
 
-        $this->afterDiscardTile($fled, $playerId, $tileId);
+        $this->giveExtraTime($playerId);
+        $this->gamestate->nextState('nextPhase');
     }
 
-    function afterDiscardTile(FledLogic $fled, $activePlayerId, $tileId)
+    function onUnableToAddTile($playerId)
+    {
+        $this->notifyAllPlayers('unableToAdd', clienttranslate('${playerName} is unable to add a tile to the prison'), [
+            'playerName' => $this->getPlayerNameById($playerId),
+        ]);
+    }
+
+    function onTileDiscarded($activePlayerId, $tileId)
     {
         //
         // Send notifications to players
         //
-        $this->notifyAllPlayers('unableToAdd', clienttranslate('${playerName} is unable to add a tile to the prison'), [
-            'playerName' => $this->getPlayerNameById($activePlayerId),
-        ]);
-        foreach ($fled->getPlayerIds() as $playerId)
+        foreach ($this->players as $playerId => $player)
         {
             if ($playerId == $activePlayerId)
             {
@@ -266,8 +277,6 @@ class Fled extends Table
                 ]);
             }
         }
-
-        $this->gamestate->nextState('nextPhase');
     }
 
     function action_placeTile($tileId, $x, $y, $orientation)
@@ -275,77 +284,77 @@ class Fled extends Table
         $playerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
-        if (!$fled->placeTile($tileId, $x, $y, $orientation, $moon, $newNpcs))
+
+        try
+        {
+            $fled->placeTile($tileId, $x, $y, $orientation);
+        }
+        catch (Throwable $e)
         {
             $refId = uniqid();
             self::trace(implode(', ', [
                 'Ref #' . $refId . ': placeTile failed',
                 'player: ' . $playerId,
                 'inputs: ' . json_encode([ $tileId, $x, $y, $orientation ]),
-                'state: ' . $fled->toJson()
+                'state: ' . $fled->toJson(),
+                'ex:' . $e->getTraceAsString(),
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
         }
+
         $this->saveGameState($fled);
 
-        $this->afterPlaceTile($fled, $playerId, $tileId, $x, $y, $orientation, $moon, $newNpcs);
+        $this->giveExtraTime($playerId);
+        $this->gamestate->nextState('nextPhase');
     }
 
-    //
-    // This functionality is the same whether called by a real player
-    // or a zombie player. The logic is extracted into a shared function
-    // to ensure same behaviour for both cases.
-    //
-    function afterPlaceTile(FledLogic $fled, $activePlayerId, $tileId, $x, $y, $orientation, $moon, $newNpcs)
+    function onNpcAdded(string $name, object $npc)
     {
-        //
-        // Update the player stats
-        //
-        $this->incStat(1, 'prison_size');
-        $this->incStat(1, 'added_to_prison', $activePlayerId);
-
-        //
-        // Send notifications to players
-        //
-        $this->notifyAllPlayers('tilePlayed', clienttranslate('${playerName} adds a tile to the prison'), [
-            'playerName' => $this->getPlayerNameById($activePlayerId),
-            'playerId' => $activePlayerId,
-            'tile' => $tileId,
-            'x' => $x,
-            'y' => $y,
-            'o' => $orientation,
-            'preserve' => [ 'playerId', 'x', 'y', 'o', 'tile' ],
-        ]);
-
-        // NPC Display name for the replay log
+        // Strings for the replay log
         $npcDisplayLabel = [
             'warder2' => clienttranslate('A new Warder'),
             'warder3' => clienttranslate('A new Warder'),
             'chaplain' => clienttranslate('The Chaplain'),
         ];
 
-        foreach ($newNpcs as $name => $npc)
-        {
-            $this->notifyAllPlayers('npcAdded', clienttranslate('${_npc} has been added to the prison at (${x}, ${y})'), [
-                'i18n' => [ '_npc' ],
-                '_npc' => $npcDisplayLabel[$name],
-                'npc' => $name,
-                'x' => $npc->pos[0],
-                'y' => $npc->pos[1],
-                'preserve' => [ 'npc' ],
-            ]);
-        }
+        $this->notifyAllPlayers('npcAdded', clienttranslate('${_npc} has been added to the prison at (${x}, ${y})'), [
+            'i18n' => [ '_npc' ],
+            '_npc' => $npcDisplayLabel[$name],
+            'npc' => $name,
+            'x' => $npc->pos[0],
+            'y' => $npc->pos[1],
+            'preserve' => [ 'npc' ],
+        ]);
+    }
 
-        // Check if the game is now ready to start
-        if ($fled->isGameSetup() && $fled->getMoveCount() == 0)
-        {
-            $this->notifyAllPlayers('setupComplete', clienttranslate('<b>WHISTLE!</b> All prisoners go to their bunk room'), [
-                'players' => $fled->getPlayerPositions(),
-                'preserve' => [ 'players' ],
-            ]);
-        }
+    function onTilePlaced($playerId, $tileId, $x, $y, $orientation)
+    {
+        //
+        // Update the player stats
+        //
+        $this->incStat(1, 'prison_size');
+        $this->incStat(1, 'added_to_prison', $playerId);
 
-        $this->gamestate->nextState('nextPhase');
+        //
+        // Send notifications to players
+        //
+        $this->notifyAllPlayers('tilePlaced', clienttranslate('${playerName} adds a tile to the prison'), [
+            'playerName' => $this->getPlayerNameById($playerId),
+            'playerId' => $playerId,
+            'tile' => $tileId,
+            'x' => $x,
+            'y' => $y,
+            'o' => $orientation,
+            'preserve' => [ 'playerId', 'x', 'y', 'o', 'tile' ],
+        ]);
+    }
+
+    function onSetupComplete(array $playerPositions)
+    {
+        $this->notifyAllPlayers('setupComplete', clienttranslate('<b>WHISTLE!</b> All prisoners go to their bunk room'), [
+            'players' => $playerPositions,
+            'preserve' => [ 'players' ],
+        ]);
     }
 
     function action_move($tileId, $x, $y)
@@ -353,7 +362,11 @@ class Fled extends Table
         $playerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
-        if (!$fled->discardTileToMove($tileId, $x, $y, $tool, $path))
+        try
+        {
+            $fled->discardTileToMove($tileId, $x, $y);
+        }
+        catch (Throwable $e)
         {
             $refId = uniqid();
             self::trace(implode(', ', [
@@ -361,31 +374,31 @@ class Fled extends Table
                 'player: ' . $playerId,
                 'inputs: ' . json_encode([ $tileId, $x, $y ]),
                 'state: ' . $fled->toJson(),
+                'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
         }
-        $this->saveGameState($fled);
 
-        $this->afterMovePlayer($fled, $playerId, $tileId, $x, $y, $tool, $path);
+        $this->saveGameState($fled);
     }
 
-    function afterMovePlayer(FledLogic $fled, $activePlayerId, $tileId, $x, $y, $tool, $path)
+    public function onTilePlayedToMove($playerId, $tileId, $x, $y, $tool, $path)
     {
         switch (FledLogic::getTileColor($tileId))
         {
-            case FLED_COLOR_GREEN:  $this->incStat(1, 'shamrocks_played', $activePlayerId); break;
-            case FLED_COLOR_PURPLE: $this->incStat(1, 'tools_used_single', $activePlayerId); break;
-            case FLED_COLOR_GOLD:   $this->incStat(1, 'tools_used_double', $activePlayerId); break;
+            case FLED_COLOR_GREEN:  $this->incStat(1, 'shamrocks_played', $playerId); break;
+            case FLED_COLOR_PURPLE: $this->incStat(1, 'tools_used_single', $playerId); break;
+            case FLED_COLOR_GOLD:   $this->incStat(1, 'tools_used_double', $playerId); break;
         }
         switch ($tool)
         {
-            case FLED_TOOL_FILE:  $this->incStat(1, 'traversed_window', $activePlayerId); break;
-            case FLED_TOOL_KEY:   $this->incStat(1, 'traversed_door', $activePlayerId); break;
-            case FLED_TOOL_BOOT:  $this->incStat(1, 'traversed_archway', $activePlayerId); break;
-            case FLED_TOOL_SPOON: $this->incStat(1, 'traversed_tunnels', $activePlayerId); break;
+            case FLED_TOOL_FILE:  $this->incStat(1, 'traversed_window', $playerId); break;
+            case FLED_TOOL_KEY:   $this->incStat(1, 'traversed_door', $playerId); break;
+            case FLED_TOOL_BOOT:  $this->incStat(1, 'traversed_archway', $playerId); break;
+            case FLED_TOOL_SPOON: $this->incStat(1, 'traversed_tunnels', $playerId); break;
         }
         $distance = count($path) - 1;
-        $this->incStat($distance, 'distance_traveled', $activePlayerId);
+        $this->incStat($distance, 'distance_traveled', $playerId);
 
         //
         // Send notifications to players
@@ -395,15 +408,13 @@ class Fled extends Table
         $this->notifyAllPlayers('tilePlayedToMove', clienttranslate('${playerName} plays ${_tile} to move to (${x}, ${y})'), [
             'i18n' => [ '_tile' ],
             '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
-            'playerName' => $this->getPlayerNameById($activePlayerId),
-            'playerId' => $activePlayerId,
+            'playerName' => $this->getPlayerNameById($playerId),
+            'playerId' => $playerId,
             'tile' => $tileId,
             'x' => $x,
             'y' => $y,
             'preserve' => [ 'playerId', 'tile' ],
         ]);
-
-        $this->afterAction($fled);
     }
 
     function action_moveWarder($tileId, $x, $y, $w, $p)
@@ -412,7 +423,11 @@ class Fled extends Table
 
         $fled = $this->loadGameState();
         $targetPlayerId = $p ? $fled->getPlayerIdByColorName($p) : null;
-        if (!$fled->discardTileToMoveWarder($tileId, $x, $y, $w, $targetPlayerId, $shackleTile, $unshackleTile, $toBunk, $toSolitary, $path, $targetIsSafe))
+        try
+        {
+            $fled->discardTileToMoveWarder($tileId, $x, $y, $w, $targetPlayerId);
+        }
+        catch (Throwable $e)
         {
             $refId = uniqid();
             self::trace(implode(', ', [
@@ -420,37 +435,32 @@ class Fled extends Table
                 'player: ' . $playerId,
                 'inputs: ' . json_encode([ $tileId, $x, $y, $w, $p ]),
                 'state: ' . $fled->toJson(),
+                'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
         }
-        $this->saveGameState($fled);
 
-        $this->afterMoveWarder($fled, $playerId, $tileId, $x, $y, $w, $targetPlayerId, $shackleTile, $unshackleTile, $toBunk, $toSolitary, $path, $targetIsSafe);
+        $this->saveGameState($fled);
     }
 
-    function afterMoveWarder(FledLogic $fled, $activePlayerId, $tileId, $x, $y, $w, $targetPlayerId, $shackleTile, $unshackleTile, $toBunk, $toSolitary, $path, $targetIsSafe)
+    function onPlayerSentToBunk($playerId)
+    {
+        $this->incStat(1, 'confiscations');
+
+        $this->notifyAllPlayers('playerSentToBunk', clienttranslate('${playerName} is sent back to bunk'), [
+            'playerName' => $this->getPlayerNameById($playerId),
+            'playerId' => $playerId,
+            'preserve' => [ 'playerId' ],
+        ]);
+    }
+
+    function onTilePlayedToMoveWarder($activePlayerId, $targetPlayerId, $tileId, $x, $y, $npcName, $path)
     {
         //
         // Update stats
         //
-        $this->incStat(1, 'whistles_blown');
-
         $distance = count($path) - 1;
         $this->incStat($distance, 'warder_distance');
-
-        if ($toBunk)
-            $this->incStat(1, 'confiscations');
-
-        $this->incStat(1, 'whistles_blown', $activePlayerId);
-
-        if ($shackleTile)
-        {
-            $this->incStat(1, 'shackled', $targetPlayerId);
-            $this->incStat(1, 'shackled_opponents', $activePlayerId);
-        }
-
-        if ($toSolitary)
-            $this->incStat(1, 'solitary', $targetPlayerId);
 
         //
         // Notify Players
@@ -466,91 +476,92 @@ class Fled extends Table
             'i18n' => [ '_tile', '_npc' ],
             '_tile' => $this->Items[$itemId]['one'],
             '_npc' =>
-                $w == 'chaplain'
+                $npcName == 'chaplain'
                     ? _('the chaplain')
                     : _('a warder'),
             'playerName' => $this->getPlayerNameById($activePlayerId),
             'targetName' => $targetPlayerId ? $this->getPlayerNameById($targetPlayerId) : null,
             'playerId' => $activePlayerId,
             'tile' => $tileId,
-            'npc' => $w,
+            'npc' => $npcName,
             'x' => $x,
             'y' => $y,
             'preserve' => [ 'playerId', 'tile', 'npc' ],
         ]);
+    }
 
-        if ($toBunk)
-        {
-            $this->notifyAllPlayers('playerSentToBunk', clienttranslate('${playerName} is sent back to bunk'), [
-                'playerName' => $this->getPlayerNameById($targetPlayerId),
-                'playerId' => $targetPlayerId,
-                'preserve' => [ 'playerId' ],
-            ]);
-        }
+    function onPlayerShackled($activePlayerId, $targetPlayerId, $shackleTile, $score)
+    {
+        $this->incStat(1, 'shackled', $targetPlayerId);
+        $this->incStat(1, 'shackled_opponents', $activePlayerId);
 
-        if ($shackleTile)
+        foreach ($this->players as $playerId => $player)
         {
-            foreach ($fled->getPlayerIds() as $playerId)
+            if ($playerId == $targetPlayerId)
             {
-                if ($playerId == $targetPlayerId)
-                {
-                    $this->notifyPlayer($playerId, 'shackled', clienttranslate('${playerName} is <b>shackled!</b>'), [
-                        'playerName' => $this->getPlayerNameById($targetPlayerId),
-                        'playerId' => $targetPlayerId,
-                        'tileId' => $shackleTile,
-                        'score' => $fled->getPlayerScore($targetPlayerId),
-                        'preserve' => [ 'playerId', 'tileId', 'score' ],
-                    ]);
-                }
-                else
-                {
-                    $this->notifyPlayer($playerId, 'shackled', clienttranslate('${playerName} is <b>shackled!</b>'), [
-                        'playerName' => $this->getPlayerNameById($targetPlayerId),
-                        'playerId' => $targetPlayerId,
-                        'score' => $fled->getPlayerScore($targetPlayerId),
-                        'preserve' => [ 'playerId', 'score' ],
-                    ]);
-                }
+                $this->notifyPlayer($playerId, 'shackled', clienttranslate('${playerName} is <b>shackled!</b>'), [
+                    'playerName' => $this->getPlayerNameById($targetPlayerId),
+                    'playerId' => $targetPlayerId,
+                    'tileId' => $shackleTile,
+                    'score' => $score,
+                    'preserve' => [ 'playerId', 'tileId', 'score' ],
+                ]);
+            }
+            else
+            {
+                $this->notifyPlayer($playerId, 'shackled', clienttranslate('${playerName} is <b>shackled!</b>'), [
+                    'playerName' => $this->getPlayerNameById($targetPlayerId),
+                    'playerId' => $targetPlayerId,
+                    'score' => $score,
+                    'preserve' => [ 'playerId', 'score' ],
+                ]);
             }
         }
+    }
 
-        if ($unshackleTile)
-        {
-            $tile = FledLogic::$FledTiles[$unshackleTile];
-            $itemId = $tile['contains'];
-            $this->notifyAllPlayers('unshackled', clienttranslate('${playerName} is <b>unshackled</b>; ${_tile} surrendered to Governor\'s Inventory.'), [
-                'i18n' => [ '_tile' ],
-                'playerName' => $this->getPlayerNameById($targetPlayerId),
-                'playerId' => $targetPlayerId,
-                '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
-                'tile' => $unshackleTile,
-                'score' => $fled->getPlayerScore($targetPlayerId),
-                'preserve' => [ 'playerId', 'tile', 'score' ],
-            ]);
-        }
+    function onPlayerUnshackled($targetPlayerId, $unshackleTile, $score)
+    {
+        $tile = FledLogic::$FledTiles[$unshackleTile];
+        $itemId = $tile['contains'];
+        $this->notifyAllPlayers('unshackled', clienttranslate('${playerName} is <b>unshackled</b>; ${_tile} surrendered to Governor\'s Inventory.'), [
+            'i18n' => [ '_tile' ],
+            'playerName' => $this->getPlayerNameById($targetPlayerId),
+            'playerId' => $targetPlayerId,
+            '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
+            'tile' => $unshackleTile,
+            'score' => $score,
+            'preserve' => [ 'playerId', 'tile', 'score' ],
+        ]);
+    }
 
-        if ($toSolitary)
-        {
-            $this->notifyAllPlayers('playerSentToSolitary', clienttranslate('${playerName} is sent to <b>solitary confinement</b>'), [
-                'playerName' => $this->getPlayerNameById($targetPlayerId),
-                'playerId' => $targetPlayerId,
-                'preserve' => [ 'playerId' ],
-            ]);
-        }
+    function onPlayerSentToSolitary($playerId)
+    {
+        $this->incStat(1, 'solitary', $playerId);
 
-        if ($targetIsSafe)
-        {
-            $roomType = $fled->getRoomTypeAt($x, $y);
-            $this->notifyAllPlayers('playerSafe', clienttranslate('${playerName} is <b>safe</b> in ${_room}'), [
-                'i18n' => [ '_room' ],
-                'playerName' => $this->getPlayerNameById($targetPlayerId),
-                '_room' => $this->RoomTypeLabels[$roomType]['the'],
-                'room' => $roomType,
-                'preserve' => [ 'room' ],
-            ]);
-        }
+        $this->notifyAllPlayers('playerSentToSolitary', clienttranslate('${playerName} is sent to <b>solitary confinement</b>'), [
+            'playerName' => $this->getPlayerNameById($playerId),
+            'playerId' => $playerId,
+            'preserve' => [ 'playerId' ],
+        ]);
+    }
 
-        $safeRoomTypes = $fled->getSafeRollCallRooms();
+    function onPlayerIsSafe($playerId, $roomType)
+    {
+        $this->notifyAllPlayers('playerSafe', clienttranslate('${playerName} is <b>safe</b> in ${_room}'), [
+            'i18n' => [ '_room' ],
+            'playerName' => $this->getPlayerNameById($playerId),
+            '_room' => $this->RoomTypeLabels[$roomType]['the'],
+            'room' => $roomType,
+            'preserve' => [ 'room' ],
+        ]);
+    }
+
+    function onWhistleMoved($playerId, $safeRoomTypes)
+    {
+        // Increase table stat and player stat
+        $this->incStat(1, 'whistles_blown');
+        $this->incStat(1, 'whistles_blown', $playerId);
+
         if (count($safeRoomTypes) == 2)
         {
             $this->notifyAllPlayers('whistleMoved', clienttranslate('Prisoners caught outside of ${_room0} and ${_room1} will be in trouble!'), [
@@ -559,7 +570,7 @@ class Fled extends Table
                 '_room1' => $this->RoomTypeLabels[$safeRoomTypes[1]]['plural'],
                 'room0' => $safeRoomTypes[0],
                 'room1' => $safeRoomTypes[1],
-                'playerId' => $activePlayerId,
+                'playerId' => $playerId,
                 'preserve' => [ 'room0', 'room1', 'playerId' ],
             ]);
         }
@@ -569,12 +580,10 @@ class Fled extends Table
                 'i18n' => [ '_room' ],
                 '_room' => $this->RoomTypeLabels[$safeRoomTypes[0]]['plural'],
                 'room' => $safeRoomTypes[0],
-                'playerId' => $activePlayerId,
+                'playerId' => $playerId,
                 'preserve' => [ 'room', 'playerId' ],
             ]);
         }
-
-        $this->afterAction($fled);
     }
 
     function action_add($tileId, $discards)
@@ -582,7 +591,11 @@ class Fled extends Table
         $playerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
-        if (!$fled->addTileToInventory($tileId, $discards))
+        try
+        {
+            $fled->addTileToInventory($tileId, $discards);
+        }
+        catch (Throwable $e)
         {
             $refId = uniqid();
             self::trace(implode(', ', [
@@ -590,15 +603,15 @@ class Fled extends Table
                 'player: ' . $playerId,
                 'tileId: ' . $tileId,
                 'state: ' . $fled->toJson(),
+                'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
         }
-        $this->saveGameState($fled);
 
-        $this->afterAddTileToInventory($fled, $playerId, $tileId, $discards);
+        $this->saveGameState($fled);
     }
 
-    function afterAddTileToInventory(FledLogic $fled, $activePlayerId, $tileId, $discards)
+    function onTileAddedToInventory($activePlayerId, $tileId, $discards, $score, $auxScore)
     {
         // Update stats
         switch (FledLogic::getTileColor($tileId))
@@ -610,11 +623,7 @@ class Fled extends Table
         }
 
         // Update player score in database
-        $score = $fled->getPlayerScore($activePlayerId);
-        $auxScore = $fled->getPlayerAuxScore($activePlayerId);
         $this->setPlayerScore($activePlayerId, $score, $auxScore);
-
-        $this->notify_inventoryDiscarded($fled, $activePlayerId, $discards);
 
         $tile = FledLogic::$FledTiles[$tileId];
         $itemId = $tile['contains'];
@@ -627,8 +636,6 @@ class Fled extends Table
             'score' => $score,
             'preserve' => [ 'playerId', 'tileId', 'score' ],
         ]);
-
-        $this->afterAction($fled);
     }
 
     function action_surrender($tileId)
@@ -636,7 +643,11 @@ class Fled extends Table
         $playerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
-        if (!$fled->surrenderTile($tileId))
+        try
+        {
+            $fled->surrenderTile($tileId);
+        }
+        catch (Throwable $e)
         {
             $refId = uniqid();
             self::trace(implode(', ', [
@@ -644,20 +655,15 @@ class Fled extends Table
                 'player: ' . $playerId,
                 'tileId: ' . $tileId,
                 'state: ' . $fled->toJson(),
+                'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
         }
-        $this->saveGameState($fled);
 
-        $this->afterSurrenderTile($fled, $playerId, $tileId);
+        $this->saveGameState($fled);
     }
 
-    //
-    // This functionality is the same whether called by a real player
-    // or a zombie player. The logic is extracted into a shared function
-    // to ensure same behaviour for both cases.
-    //
-    function afterSurrenderTile(FledLogic $fled, $activePlayerId, $tileId)
+    function onTileSurrendered($activePlayerId, $tileId)
     {
         //
         // Update the table and player stats
@@ -678,14 +684,21 @@ class Fled extends Table
             'tile' => $tileId,
             'preserve' => [ 'playerId', 'tile' ],
         ]);
-
-        $this->afterAction($fled);
     }
 
-    function afterAction(FledLogic $fled)
+    function onActionComplete(int $actionsPlayed)
     {
-        if ($fled->countActionsPlayed() == 2)
+        if ($actionsPlayed == 2)
             $this->gamestate->nextState('nextPhase');
+    }
+
+    function onMissedTurn($playerId)
+    {
+        $this->notifyAllPlayers('missedTurn', clienttranslate('${playerName} <b>misses a turn</b> in solitary confinement'), [
+            'playerName' => $this->getPlayerNameById($playerId),
+            'playerId' => $playerId,
+            'preserve' => [ 'playerId' ],
+        ]);
     }
 
     function action_escape($discards)
@@ -693,7 +706,11 @@ class Fled extends Table
         $activePlayerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
-        if (!$fled->discardTilesToEscape($discards))
+        try
+        {
+            $fled->discardTilesToEscape($discards);
+        }
+        catch (Throwable $e)
         {
             $refId = uniqid();
             self::trace(implode(', ', [
@@ -701,32 +718,33 @@ class Fled extends Table
                 'player: ' . $activePlayerId,
                 'state: ' . $fled->toJson(),
                 'input: ' . json_encode([ $discards ]),
+                'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
         }
-        $this->saveGameState($fled);
 
+        $this->saveGameState($fled);
+    }
+
+    public function onPlayerEscaped($playerId, $score, $auxScore)
+    {
         //
         // Update the player stats
         //
         $this->incStat(1, 'escaped');
-        $this->setStat(1, 'escaped', $activePlayerId);
+        $this->setStat(1, 'escaped', $playerId);
 
         //
         // Update player score in database
         //
-        $score = $fled->getPlayerScore($activePlayerId);
-        $auxScore = $fled->getPlayerAuxScore($activePlayerId);
-        $this->setPlayerScore($activePlayerId, $score, $auxScore);
+        $this->setPlayerScore($playerId, $score, $auxScore);
 
         //
         // Send notifications to players
         //
-        $this->notify_inventoryDiscarded($fled, $activePlayerId, $discards);
-
-        $this->notifyAllPlayers('prisonerEscaped', clienttranslate('*${playerName} escapes!*'), [
-            'playerName' => $this->getPlayerNameById($activePlayerId),
-            'playerId' => $activePlayerId,
+        $this->notifyAllPlayers('prisonerEscaped', clienttranslate('<b>${playerName} escapes!</b>'), [
+            'playerName' => $this->getPlayerNameById($playerId),
+            'playerId' => $playerId,
             'score' => $score,
             'preserve' => [ 'playerId', 'score' ],
         ]);
@@ -741,7 +759,11 @@ class Fled extends Table
         $playerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
-        if (!$fled->drawTiles($governorTileId, $drawnBeforeShuffle, $drawnAfterShuffle, $drawPileSize))
+        try
+        {
+            $fled->drawTiles($governorTileId);
+        }
+        catch (Throwable $e)
         {
             $refId = uniqid();
             self::trace(implode(', ', [
@@ -749,42 +771,41 @@ class Fled extends Table
                 'player: ' . $playerId,
                 'tileId: ' . $governorTileId,
                 'state: ' . $fled->toJson(),
+                'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
         }
+
         $this->saveGameState($fled);
 
-        $this->afterDrawTiles($fled, $playerId, $governorTileId, $drawnBeforeShuffle, $drawnAfterShuffle, $drawPileSize);
+        $this->gamestate->nextState('nextTurn');
     }
 
-    function afterDrawTiles(FledLogic $fled, $activePlayerId, $governorTileId, $drawnBeforeShuffle, $drawnAfterShuffle, $drawPileSize)
+    function onTookFromGovernor($playerId, $tileId)
     {
         //
         // Update the player stats
         //
-        if ($governorTileId)
-        {
-            $this->incStat(1, 'items_from_governor');
-            $this->incStat(1, 'items_from_governor', $activePlayerId);
-        }
+        $this->incStat(1, 'items_from_governor');
+        $this->incStat(1, 'items_from_governor', $playerId);
 
         //
         // Send notifications to players
         //
-        if ($governorTileId)
-        {
-            $tile = FledLogic::$FledTiles[$governorTileId];
-            $itemId = $tile['contains'];
-                $this->notifyAllPlayers('tookFromGovernor', clienttranslate('${playerName} takes ${_tile} from the Governor\'s inventory'), [
-                'i18n' => [ '_tile' ],
-                '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
-                'playerName' => $this->getPlayerNameById($activePlayerId),
-                'playerId' => $activePlayerId,
-                'tile' => $governorTileId,
-                'preserve' => [ 'playerId', 'tileId' ],
-            ]);
-        }
+        $tile = FledLogic::$FledTiles[$tileId];
+        $itemId = $tile['contains'];
+            $this->notifyAllPlayers('tookFromGovernor', clienttranslate('${playerName} takes ${_tile} from the Governor\'s inventory'), [
+            'i18n' => [ '_tile' ],
+            '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
+            'playerName' => $this->getPlayerNameById($playerId),
+            'playerId' => $playerId,
+            'tile' => $tileId,
+            'preserve' => [ 'playerId', 'tileId' ],
+        ]);
+    }
 
+    function onTilesDrawn($activePlayerId, $drawnBeforeShuffle, $drawnAfterShuffle, $drawPileSize)
+    {
         if (count($drawnBeforeShuffle))
         {
             $logMessage =
@@ -792,28 +813,17 @@ class Fled extends Table
                     ? clienttranslate('${playerName} draws 1 tile')
                     : clienttranslate('${playerName} draws ${n} tiles');
 
-            foreach ($fled->getPlayerIds() as $playerId)
-            {
-                if ($playerId == $activePlayerId)
-                {
-                    $this->notifyPlayer($playerId, 'tilesDrawn', $logMessage, [
-                        'playerName' => $this->getPlayerNameById($activePlayerId),
-                        'playerId' => $activePlayerId,
-                        'n' => count($drawnBeforeShuffle),
-                        'tileIds' => $drawnBeforeShuffle,
-                        'preserve' => [ 'tileIds', 'r', 'playerId' ],
-                    ]);
-                }
-                else
-                {
-                    $this->notifyPlayer($playerId, 'tilesDrawn', $logMessage, [
-                        'playerName' => $this->getPlayerNameById($activePlayerId),
-                        'playerId' => $activePlayerId,
-                        'n' => count($drawnBeforeShuffle),
-                        'preserve' => [ 'playerId' ],
-                    ]);
-                }
-            }
+            $this->notifyAllPlayers('tilesDrawn', $logMessage, [
+                'playerName' => $this->getPlayerNameById($activePlayerId),
+                'playerId' => $activePlayerId,
+                'n' => count($drawnBeforeShuffle),
+                'preserve' => [ 'n', 'playerId' ],
+            ]);
+
+            $this->notifyPlayer($activePlayerId, 'tilesReceived', '', [
+                'tileIds' => $drawnBeforeShuffle,
+                'preserve' => [ 'tileIds' ],
+            ]);
         }
 
         if (count($drawnAfterShuffle))
@@ -830,34 +840,21 @@ class Fled extends Table
                         : clienttranslate('${playerName} draws ${n} more tiles')
                     );
 
-            foreach ($fled->getPlayerIds() as $playerId)
-            {
-                if ($playerId == $activePlayerId)
-                {
-                    $this->notifyPlayer($playerId, 'tilesDrawn', $logMessage, [
-                        'playerName' => $this->getPlayerNameById($activePlayerId),
-                        'playerId' => $activePlayerId,
-                        'n' => count($drawnAfterShuffle),
-                        'tileIds' => $drawnAfterShuffle,
-                        'preserve' => [ 'tileIds', 'playerId' ],
-                    ]);
-                }
-                else
-                {
-                    $this->notifyPlayer($playerId, 'tilesDrawn', $logMessage, [
-                        'playerName' => $this->getPlayerNameById($activePlayerId),
-                        'playerId' => $activePlayerId,
-                        'n' => count($drawnAfterShuffle),
-                        'preserve' => [ 'playerId' ],
-                    ]);
-                }
-            }
-        }
+            $this->notifyAllPlayers('tilesDrawn', $logMessage, [
+                'playerName' => $this->getPlayerNameById($activePlayerId),
+                'playerId' => $activePlayerId,
+                'n' => count($drawnAfterShuffle),
+                'preserve' => [ 'playerId', 'n' ],
+            ]);
 
-        $this->gamestate->nextState('nextTurn');
+            $this->notifyPlayer($activePlayerId, 'tilesReceived', '', [
+                'tileIds' => $drawnAfterShuffle,
+                'preserve' => [ 'tileIds' ],
+            ]);
+        }
     }
 
-    function notify_inventoryDiscarded(FledLogic $fled, $playerId, $discards)
+    function onInventoryDiscarded($playerId, $discards, $score)
     {
         //
         // Send notifications to players
@@ -883,8 +880,8 @@ class Fled extends Table
                             'i18n' => [ '_tile1', '_tile2' ],
                             '_tile1' => $tile1['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId1]['two double'] : $this->Items[$itemId1]['two'],
                             '_tile2' => '',
-                            'tile1' => $tile1,
-                            'tile2' => $tile2,
+                            'tile1' => $discards[0],
+                            'tile2' => $discards[1],
                         ],
                     ];
                 }
@@ -896,8 +893,8 @@ class Fled extends Table
                             'i18n' => [ '_tile1', '_tile2' ],
                             '_tile1' => $tile1['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId1]['double'] : $this->Items[$itemId1]['one'],
                             '_tile2' => $tile2['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId2]['double'] : $this->Items[$itemId2]['one'],
-                            'tile1' => $itemId1,
-                            'tile2' => $itemId2,
+                            'tile1' => $discards[0],
+                            'tile2' => $discards[1],
                         ],
                     ];
                 }
@@ -909,7 +906,7 @@ class Fled extends Table
                     'args' => [
                         'i18n' => [ '_tile1' ],
                         '_tile1' => $tile1['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId1]['double'] : $this->Items[$itemId1]['one'],
-                        'tile1' => $itemId1,
+                        'tile1' => $discards[0],
                     ],
                 ];
             }
@@ -919,10 +916,17 @@ class Fled extends Table
                 'playerName' => $this->getPlayerNameById($playerId),
                 'playerId' => $playerId,
                 'tileIds' => $discards,
-                'score' => $fled->getPlayerScore($playerId),
+                'score' => $score,
                 'preserve' => [ 'playerId', 'tileIds', 'score' ],
             ]);
         }
+    }
+
+    function onEndTurn()
+    {
+        // The only reason for this is to notify the client to decrement
+        // its last turn counter (once a player has escaped)
+        $this->notifyAllPlayers('endTurn', '', []);
     }
 
     
@@ -951,43 +955,9 @@ class Fled extends Table
             return;
         }
 
-        $playerId = $fled->getNextPlayerId();
+        $playerId = $fled->advanceNextPlayer();
 
-        // Determine if the next player should lose a turn from being in Solitary Confinement
-        $fledChanged = false;
-        while ($fled->isPlayerInSolitary($playerId))
-        {
-            $fled->releasePlayerFromSolitary($playerId, $unshackleTile);
-            $fledChanged = true;
-
-            $this->notifyAllPlayers('missedTurn', clienttranslate('${playerName} <b>misses a turn</b> in solitary confinement'), [
-                'playerName' => $this->getPlayerNameById($playerId),
-                'playerId' => $playerId,
-                'preserve' => [ 'playerId' ],
-            ]);
-
-            $this->notifyAllPlayers('playerSentToBunk', clienttranslate('${playerName} is sent back to bunk'), [
-                'playerName' => $this->getPlayerNameById($playerId),
-                'playerId' => $playerId,
-                'preserve' => [ 'playerId' ],
-            ]);
-
-            $tile = FledLogic::$FledTiles[$unshackleTile];
-            $itemId = $tile['contains'];
-            $this->notifyAllPlayers('unshackled', clienttranslate('${playerName} is <b>unshackled</b>; ${_tile} surrendered to Governor\'s Inventory.'), [
-                'playerName' => $this->getPlayerNameById($playerId),
-                'playerId' => $playerId,
-                '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
-                'tile' => $unshackleTile,
-                'score' => $fled->getPlayerScore($playerId),
-                'preserve' => [ 'playerId', 'tile', 'score' ],
-            ]);
-
-            $playerId = $fled->getNextPlayerId();
-        }
-
-        if ($fledChanged)
-            $this->saveGameState($fled);
+        $this->saveGameState($fled);
 
         // Is the game over now? (now that we've potentially skipped over other players)
         if ($fled->getGameProgression() >= 100)
@@ -1026,48 +996,16 @@ class Fled extends Table
                 $legalMoves = $fled->getLegalStartingTileMoves();
                 shuffle($legalMoves);
                 $move = array_pop($legalMoves);
-                if (!$fled->placeTile($move[0], $move[1], $move[2], $move[3], $moon, $newNpcs))
-                {
-                    $refId = uniqid();
-                    self::trace(implode(', ', [
-                        'Ref #' . $refId . ': placeTile failed',
-                        'zombie player: ' . $zombiePlayerId,
-                        'tileId: ' . $move[0],
-                        'x: ' . $move[1],
-                        'y: ' . $move[2],
-                        'o: ' . $move[3],
-                        'state: ' . $fled->toJson()
-                    ]));
-                    throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
-                }
-                $this->saveGameState($fled);
-        
-                $this->afterPlaceTile($fled, $zombiePlayerId, $move[0], $move[1], $move[2], $move[3], $moon, $newNpcs);
-                return;
+                $fled->placeTile($move[0], $move[1], $move[2], $move[3]);
+                break;
 
             case STATE_ADD_TILE:
                 // Randomly choose a tile and a legal move
                 $legalMoves = $fled->getLegalTileMoves();
                 shuffle($legalMoves);
                 $move = array_pop($legalMoves);
-                if (!$fled->placeTile($move[0], $move[1], $move[2], $move[3], $moon, $newNpcs))
-                {
-                    $refId = uniqid();
-                    self::trace(implode(', ', [
-                        'Ref #' . $refId . ': placeTile failed',
-                        'zombie player: ' . $zombiePlayerId,
-                        'tileId: ' . $move[0],
-                        'x: ' . $move[1],
-                        'y: ' . $move[2],
-                        'o: ' . $move[3],
-                        'state: ' . $fled->toJson()
-                    ]));
-                    throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
-                }
-                $this->saveGameState($fled);
-        
-                $this->afterPlaceTile($fled, $zombiePlayerId, $move[0], $move[1], $move[2], $move[3], $moon, $newNpcs);
-                return;
+                $fled->placeTile($move[0], $move[1], $move[2], $move[3]);
+                break;
 
             case STATE_PLAY_TILES:
                 // Just surrender random tiles
@@ -1075,16 +1013,13 @@ class Fled extends Table
                 $index = rand(0, count($handTiles) - 1);
                 $surrenderTile = $handTiles[$index];
                 $fled->surrenderTile($surrenderTile);
-                $this->saveGameState($fled);
-                $this->afterSurrenderTile($fled, $zombiePlayerId, $surrenderTile);
-                return;
+                break;
 
             case STATE_DRAW_TILES:
-                $fled->drawTiles(0, $drawnBeforeShuffle, $drawnAfterShuffle, $drawPileCount, $hardLabor);
-                $this->saveGameState($fled);
-                $this->afterDrawTiles($fled, $zombiePlayerId, 0, $drawnBeforeShuffle, $drawnAfterShuffle, $drawPileCount, $hardLabor);
-                return;
+                $fled->drawTiles(0);
+                break;
         }
+        $this->saveGameState($fled);
     }
 
     

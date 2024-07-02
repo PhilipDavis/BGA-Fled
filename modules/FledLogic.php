@@ -1,6 +1,8 @@
 <?php
 // © Copyright 2024, Philip Davis (mrphilipadavis AT gmail)
 
+require_once('FledEvents.php');
+
 // These colour indices correspond to the gameinfos->player_color field
 define('FLED_PLAYER_YELLOW', 0);
 define('FLED_PLAYER_BLUE', 1);
@@ -73,7 +75,8 @@ define('FLED_HEIGHT', 13);
 
 class FledLogic
 {
-    private $data;
+    private object $data;
+    private FledEvents $eventHandlers;
 
     // Note: All bunk, yard, and courtyard tiles have a tunnel
 
@@ -1057,14 +1060,15 @@ S2 - ghost tile
 six tiles... TODO
 */
 
-    private function __construct($data)
+    private function __construct($data, FledEvents $handlers = null)
     {
         $this->data = $data;
+        $this->eventHandlers = $handlers;
     }
 
-    static function fromJson($json)
+    static function fromJson(string $json, FledEvents $handlers)
     {
-        return new FledLogic(json_decode($json));
+        return new FledLogic(json_decode($json), $handlers);
     }
 
     private static $debug = false;
@@ -1082,7 +1086,7 @@ six tiles... TODO
     //
     // $playerColors is Record<PlayerId, ColorIndex>
     //
-    static function newGame($playerColors, $options)
+    static function newGame($playerColors, $options, FledEvents $events)
     {
         $playerIds = array_keys($playerColors);
         $playerCount = count($playerColors);
@@ -1133,7 +1137,6 @@ six tiles... TODO
                 'placedTile' => false,
                 'actionsPlayed' => 0,
                 'escaped' => false,
-                'lastTurn' => false, // True when the player gets one last turn (i.e. another player just escaped)
             ];
         }
 
@@ -1147,7 +1150,7 @@ six tiles... TODO
                 'warder1' => [
                     'pos' => [ 6, 6 ],
                 ],
-                /*
+                /* These get added as the game progressese
                 'warder2' => null,
                 'warder3' => null,
                 'chaplain' => null,
@@ -1163,10 +1166,10 @@ six tiles... TODO
             'drawPile' => $drawPile,
             'discardPile' => [],
             'hardLabor' => 0, // Set to 1 once Hard Labor is called
-            'finalTurnsLeft' => null, // Once a player has escaped, this counts down to how many turns are left; game over at 0
+            'finalTurns' => null, // Once a player has escaped, this counts down to how many turns are left; game over at 0
             'setup' => 0, // Switches to 1 once everyone has played their starter bunks
             'moves' => 0,
-        ]);
+        ], $events);
     }
 
     // Only intended for unit testing
@@ -1370,6 +1373,8 @@ six tiles... TODO
 
     public function isTileInPlayersHand($tileId, $playerId)
     {
+        if (array_search($tileId, $this->data->players->$playerId->hand) === false)
+            throw new Exception(json_encode([ 'tile' => $tileId, 'player' => $this->data->players->$playerId->hand ])); // KILL
         return array_search($tileId, $this->data->players->$playerId->hand) !== false;
     }
 
@@ -1421,18 +1426,18 @@ six tiles... TODO
         $this->removeTileFromHand($tileId, $playerId);
         $this->addTileToDiscardPile($tileId);
 
+        $this->eventHandlers->onUnableToAddTile($playerId);
+        $this->eventHandlers->onTileDiscarded($playerId, $tileId);
+
         // Technically, the player hasn't added a tile...
         // but we're just using this flag to indicate that
         // the addTile phase has been completed.
         $this->data->players->$playerId->addedTile = true;
         $this->data->moves++;
-
-        return true;
     }
 
-    public function placeTile($tileId, $x, $y, $orientation, &$moon, &$newNpcs)
+    public function placeTile($tileId, $x, $y, $orientation)
     {
-        $newNpcs = (object)[];
         if ($x < 0 || $x >= 14 || $y < 0 || $y >= 13)
             throw new Exception('Invalid location');
 
@@ -1442,8 +1447,8 @@ six tiles... TODO
         $bunkTileId = $this->getStartingBunkTileId($playerId);
         $isBunkTile = $tileId === $bunkTileId && !$this->isTileOnBoard($tileId);
 
-        // Validate that the player has the tile in hande (or is the starter tile)
-        if (!$this->isTileInPlayersHand($tileId, $playerId) && !$isBunkTile)
+        // Validate that the player has the tile in hand (or is the starter tile)
+        if (!$isBunkTile && !$this->isTileInPlayersHand($tileId, $playerId))
             throw new Exception('Tile not in player hand');
 
         if (!$this->isLegalTilePlacement($tileId, $x, $y, $orientation, $isBunkTile))
@@ -1459,63 +1464,66 @@ six tiles... TODO
         // And advance to the next player.
         if ($isBunkTile)
         {
-            $this->data->players->$playerId->pos = $this->getTileHeadPos($x, $y);
-            $this->advanceNextPlayer();
+            $this->eventHandlers->onTilePlaced($playerId, $tileId, $x, $y, $orientation);
 
             // Check to see if all players have now placed their bunk tiles
             $isSetupComplete = true;
-            foreach ($this->data->players as $playerId => $player)
+            foreach ($this->data->players as $pid => $player)
             {
-                $tileId = $this->getStartingBunkTileId($playerId);
+                $tileId = $this->getStartingBunkTileId($pid);
                 if (!$this->isTileOnBoard($tileId))
                     $isSetupComplete = false;
             }
+
+            $this->data->players->$playerId->pos = $this->getTileHeadPos($x, $y);
             if ($isSetupComplete)
+            {
                 $this->data->setup = 1;
-        }
-        else // Otherwise, increase the move counter because this was a real move
-        {
-            $this->data->moves++;
-            
-            // Check for Moon symbol on the tile and add a new NPC
-            // Also, the open window changes when a moon tile is played.
-            $moon = FledLogic::isMoonTile($tileId);
-            if ($tileId === FLED_TILE_CHAPEL)
-            {
-                $this->data->npcs->chaplain = (object)[
-                    'pos' => [ $x, $y ],
-                ];
-                $newNpcs->chaplain = $this->data->npcs->chaplain;
-                $this->data->openWindow--;
+                $this->eventHandlers->onSetupComplete($this->getPlayerPositions());
             }
-            else if ($moon)
-            {
-                $nextWarder = array_key_exists('warder2', (array)$this->data->npcs) ? 'warder3' : 'warder2';
-                $this->data->npcs->$nextWarder = (object)[
-                    'pos' => [ $x, $y ],
-                ];
-                $newNpcs->$nextWarder = $this->data->npcs->$nextWarder;
-                $this->data->openWindow--;
-            }
+            return;
         }
+
+        // Otherwise, increase the move counter because this was a real move
+        $this->data->moves++;
 
         $this->data->players->$playerId->placedTile = true;
-
-        return true;
+        $this->eventHandlers->onTilePlaced($playerId, $tileId, $x, $y, $orientation);
+        
+        // Check for Moon symbol on the tile and add a new NPC
+        // Also, the open window changes when a moon tile is played.
+        $moon = FledLogic::isMoonTile($tileId);
+        if ($tileId === FLED_TILE_CHAPEL)
+        {
+            $this->data->npcs->chaplain = (object)[
+                'pos' => [ $x, $y ],
+            ];
+            $this->eventHandlers->onNpcAdded('chaplain', $this->data->npcs->chaplain);
+            $this->data->openWindow--; // TODO: emit open window changed?
+        }
+        else if ($moon)
+        {
+            $nextWarder = array_key_exists('warder2', (array)$this->data->npcs) ? 'warder3' : 'warder2';
+            $this->data->npcs->$nextWarder = (object)[
+                'pos' => [ $x, $y ],
+            ];
+            $this->eventHandlers->onNpcAdded($nextWarder, $this->data->npcs->$nextWarder);
+            $this->data->openWindow--; // TODO: emit open window changed?
+        }
     }
 
-    public function discardTileToMove($tileId, $x, $y, &$tool, &$path)
+    public function discardTileToMove($tileId, $x, $y)
     {
         $playerId = $this->getNextPlayerId();
 
         // Verify that the player holds this tile in hand
         if (!$this->isTileInPlayersHand($tileId, $playerId))
-            return false;
+            throw new Exception('Invalid tile');
         
         // Verify the player has actions remaining
         $actionsPlayed = $this->data->players->$playerId->actionsPlayed;
         if ($actionsPlayed >= 2)
-            return false;
+            throw new Exception('Too many actions');
 
         // Remove the card from the player's hand
         // and put it in the discard pile
@@ -1545,14 +1553,16 @@ six tiles... TODO
                 break;
             }
         }
-        if (!$isLegal) return false;
+        if (!$isLegal)
+            throw new Exception('Illegal move');
 
         $this->data->players->$playerId->pos = [ $x, $y ];
 
-        $this->data->players->$playerId->actionsPlayed = $actionsPlayed + 1;
+        $this->data->players->$playerId->actionsPlayed = ++$actionsPlayed;
         $this->data->moves++;
 
-        return true;
+        $this->eventHandlers->onTilePlayedToMove($playerId, $tileId, $x, $y, $tool, $path);
+        $this->eventHandlers->onActionComplete($actionsPlayed);
     }
 
     public function discardTilesToEscape($discards)
@@ -1563,12 +1573,12 @@ six tiles... TODO
         $y = $player->pos[1];
 
         // Everybody else gets one more turn
-        $finalTurnsLeft = $this->data->finalTurnsLeft ?? count($this->data->order);
-        $this->data->finalTurnsLeft = $finalTurnsLeft - 1;
+        $finalTurns = $this->data->finalTurns ?? count($this->data->order);
+        $this->data->finalTurns = $finalTurns - 1;
 
         // Validate that the player can escape
         if (!$this->canPlayerEscape($playerId))
-            return false;
+            throw new Exception('Illegal escape');
 
         $tileId = $this->getTileAt($x, $y) % 100;
         $tile = FledLogic::$FledTiles[$tileId];
@@ -1590,14 +1600,23 @@ six tiles... TODO
         }
     
         if ($toolsRemaining > 0)
-            return false;
+            throw new Exception('Not enough tools to escape');
 
         // Remove the discard tiles from the player's inventory
         // (this also validates that the tiles exist there)
         foreach ($discards as $tileId)
             $this->removeTileFromInventory($tileId, $playerId);
 
-        return true;
+        $score = $this->getPlayerScore($playerId);
+    
+        $this->eventHandlers->onInventoryDiscarded($playerId, $discards, $score);
+
+        $this->data->players->$playerId->escaped = true;
+
+        $score = $this->getPlayerScore($playerId);
+        $auxScore = $this->getPlayerAuxScore($playerId);
+        $this->eventHandlers->onPlayerEscaped($playerId, $score, $auxScore);
+        $this->eventHandlers->onEndTurn();
     }
 
     public function isSafeForRollCall($x, $y)
@@ -1624,11 +1643,13 @@ six tiles... TODO
         return null;
     }
 
-    public function discardTileToMoveWarder($tileId, $x, $y, $npcName, $targetPlayerId, &$shackleTile, &$unshackleTile, &$toBunk, &$toSolitary, &$path, &$targetIsSafe)
+    public function discardTileToMoveWarder($tileId, $x, $y, $npcName, $targetPlayerId)
     {
         $toBunk = false;
         $toSolitary = false;
         $targetIsSafe = false;
+        $shackleTile = null;
+        $unshackleTile = null;
         $playerId = $this->getNextPlayerId();
 
         // Make sure that (x, y) refer to the head room of a double tile
@@ -1646,19 +1667,20 @@ six tiles... TODO
         {
             $targetPlayer = $this->data->players->$targetPlayerId;
             if ($targetPlayer->pos[0] != $x || $targetPlayer->pos[1] != $y)
-                return false;
+                throw new Exception('Target player is not there');
         }
 
-        // TODO: verify that $npcName exists
+        if (!isset($this->data->npcs->$npcName))
+            throw new Exception('No NPC named ' . $npcName);
 
         // Verify that the player holds this tile in hand
         if (!$this->isTileInPlayersHand($tileId, $playerId))
-            return false;
+            throw new Exception('Invalid tile');
 
         // Verify the player has actions remaining
         $actionsPlayed = $this->data->players->$playerId->actionsPlayed;
         if ($actionsPlayed >= 2)
-            return false;
+            throw new Exception('Too many actions');
 
         // Remove the card from the player's hand
         // and put it in the discard pile
@@ -1727,13 +1749,34 @@ six tiles... TODO
         // Also, note that the whistle moves *after* the warder move is resolved
         $this->data->whistlePos = ($this->data->whistlePos + 4) % 5;
 
-        $this->data->players->$playerId->actionsPlayed = $actionsPlayed + 1;
+        $this->data->players->$playerId->actionsPlayed = ++$actionsPlayed;
         $this->data->moves++;
 
-        return true;
+        $this->eventHandlers->onTilePlayedToMoveWarder($playerId, $targetPlayerId, $tileId, $x, $y, $npcName, $path);
+
+        if ($toBunk)
+            $this->eventHandlers->onPlayerSentToBunk($targetPlayerId);
+
+        if ($shackleTile)
+            $this->eventHandlers->onPlayerShackled($playerId, $targetPlayerId, $shackleTile, $this->getPlayerScore($targetPlayerId));
+
+        if ($unshackleTile)
+            $this->eventHandlers->onPlayerUnshackled($targetPlayerId, $unshackleTile, $this->getPlayerScore($targetPlayerId));
+
+        if ($toSolitary)
+            $this->eventHandlers->onPlayerSentToSolitary($targetPlayerId);
+
+        if ($targetIsSafe)
+        {
+            $roomType = $this->getRoomTypeAt($x, $y);
+            $this->eventHandlers->onPlayerIsSafe($targetPlayerId, $roomType);
+        }
+
+        $this->eventHandlers->onWhistleMoved($playerId, $this->getSafeRollCallRooms());
+        $this->eventHandlers->onActionComplete($actionsPlayed);
     }
 
-    public function releasePlayerFromSolitary($playerId, &$unshackleTile)
+    public function releasePlayerFromSolitary($playerId)
     {
         if (!$this->data->players->$playerId->shackleTile)
             throw new Exception('player ' . $playerId . ' not shackled');
@@ -1747,7 +1790,9 @@ six tiles... TODO
 
         $this->data->governorInventory[] = $unshackleTile;
 
-        $this->advanceNextPlayer();
+        $this->eventHandlers->onMissedTurn($playerId);
+        $this->eventHandlers->onPlayerSentToBunk($playerId);
+        $this->eventHandlers->onPlayerUnshackled($playerId, $unshackleTile, $this->getPlayerScore($playerId));
     }
 
     public function addTileToInventory($tileId, $discards)
@@ -1764,21 +1809,28 @@ six tiles... TODO
         // Verify the player has actions remaining
         $actionsPlayed = $this->data->players->$playerId->actionsPlayed;
         if ($actionsPlayed >= 2)
-            return false;
+            throw new Exception('Too many actions');
 
         // Remove the discards from the player's inventory (also validates that they exist there)
         foreach ($discards as $discardTileId)
             $this->removeTileFromInventory($discardTileId, $playerId);
+
+        $score = $this->getPlayerScore($playerId);
+        $this->eventHandlers->onInventoryDiscarded($playerId, $discards, $score);
 
         // Remove the card from the player's hand
         // And add it to the player's inventory
         $this->removeTileFromHand($tileId, $playerId);
         $this->data->players->$playerId->inventory[] = $tileId;
 
-        $this->data->players->$playerId->actionsPlayed = $actionsPlayed + 1;
+        $this->data->players->$playerId->actionsPlayed = ++$actionsPlayed;
         $this->data->moves++;
 
-        return true;
+        $score = $this->getPlayerScore($playerId);
+        $auxScore = $this->getPlayerAuxScore($playerId);
+        $this->eventHandlers->onTileAddedToInventory($playerId, $tileId, $discards, $score, $auxScore);
+
+        $this->eventHandlers->onActionComplete($actionsPlayed);
     }
 
     public function surrenderTile($tileId)
@@ -1788,47 +1840,50 @@ six tiles... TODO
         // Verify that the player holds this tile in hand
         $hand = $this->data->players->$playerId->hand;
         if (array_search($tileId, $hand) === false)
-            return false;
+            throw new Exception('Tile not held');
 
         // Verify the player has actions remaining
         $actionsPlayed = $this->data->players->$playerId->actionsPlayed;
         if ($actionsPlayed >= 2)
-            return false;
+            throw new Exception('Too many actions');
 
         // Remove the card from the player's hand
         // And add it to the Governor's inventory
         $this->removeTileFromHand($tileId, $playerId);
         $this->data->governorInventory[] = $tileId;
 
-        $this->data->players->$playerId->actionsPlayed = $actionsPlayed + 1;
+        $this->data->players->$playerId->actionsPlayed = ++$actionsPlayed;
         $this->data->moves++;
 
-        return true;
+        $this->eventHandlers->onTileSurrendered($playerId, $tileId);
+        $this->eventHandlers->onActionComplete($actionsPlayed);
     }
 
-    public function drawTiles($governorTileId, &$drawnBeforeShuffle, &$drawnAfterShuffle, &$drawPileCount)
+    public function drawTiles($governorTileId)
     {
         $playerId = $this->getNextPlayerId();
 
         // Verify the player has played their actions
         $actionsPlayed = $this->data->players->$playerId->actionsPlayed;
         if ($actionsPlayed < 2)
-            return false;
+            throw new Exception('Not ready');
 
         // No more room in the hand
         if (count($this->data->players->$playerId->hand) >= 5)
-            return false;
+            throw new Exception('Hand is full');
 
         if ($governorTileId)
         {
             // Verify that the Governor holds this tile in inventory
             if (array_search($governorTileId, $this->data->governorInventory) === false)
-                return false;
+                throw new Exception('Tile missing');
 
             // Remove the card from the Governor's inventory
             // and add it to the player's hand
             $this->data->governorInventory = array_values(array_diff($this->data->governorInventory, [ $governorTileId ]));
             $this->data->players->$playerId->hand[] = $governorTileId;
+
+            $this->eventHandlers->onTookFromGovernor($playerId, $governorTileId);
         }
 
         $wasShuffled = false;
@@ -1863,21 +1918,32 @@ six tiles... TODO
         
         $this->data->moves++;
 
-        $this->advanceNextPlayer();
-
         $drawPileCount = count($this->data->drawPile);
-        return true;
+        $this->eventHandlers->onTilesDrawn($playerId, $drawnBeforeShuffle, $drawnAfterShuffle, $drawPileCount);
+        $this->eventHandlers->onEndTurn();
     }
 
     public function advanceNextPlayer()
     {
-        $this->data->nextPlayer = ($this->data->nextPlayer + 1) % count($this->data->order);
+        do
+        {
+            $this->data->nextPlayer = ($this->data->nextPlayer + 1) % count($this->data->order);
 
-        $playerId = $this->getNextPlayerId();
-        $this->data->players->$playerId->placedTile = false;
-        $this->data->players->$playerId->actionsPlayed = 0;
+            $playerId = $this->getNextPlayerId();
+            $this->data->players->$playerId->placedTile = false;
+            $this->data->players->$playerId->actionsPlayed = 0;
+
+            // Determine if the next player should lose a turn from being in Solitary Confinement
+            if (!$this->isPlayerInSolitary($playerId))
+                break;
+    
+            $this->releasePlayerFromSolitary($playerId);
+        }
+        while (true);
 
         // TODO: check for if we're in end game and this was last turn for this player. also reduce the counter
+
+        return $this->getNextPlayerId();
     }
 
     public function isLegalTilePlacement($tileId, $x, $y, $orientation, $isStarterBunk = false)
@@ -2037,9 +2103,9 @@ six tiles... TODO
         // If a player has already escaped, the game progression
         // will be 100 - # of turns remaining (even when not
         // enough tiles to draw)
-        $finalTurnsLeft = $this->data->finalTurnsLeft;
-        if ($finalTurnsLeft !== null)
-            return 100 - $finalTurnsLeft;
+        $finalTurns = $this->data->finalTurns;
+        if ($finalTurns !== null)
+            return 100 - $finalTurns;
 
         // Look at the total number of tiles that may be drawn
         // (including from discard pile and one from the Governor
@@ -2602,6 +2668,12 @@ six tiles... TODO
     public function countGovernorInventory()
     {
         return count($this->data->governorInventory);
+    }
+
+    public function wasTilePlaced()
+    {
+        $playerId = $this->getNextPlayerId();
+        return $this->data->players->$playerId->placedTile;
     }
 
     public function countActionsPlayed()

@@ -954,7 +954,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 const pageTitleDiv = document.getElementById('page-title');
                 pageTitleDiv.insertAdjacentHTML('beforeend', '<div id="fled_last-turn"></div>');
                 const lastTurnDiv = document.getElementById('fled_last-turn');
-                lastTurnDiv.innerText = _('This is the last turn!');
+                lastTurnDiv.innerText = _('This is your last turn!');
             }
         },
 
@@ -1143,7 +1143,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     }
 
                     if (fled.canEscape()) {
-                        this.addActionButton(`fled_button-escape3`, _('Escape (last chance!)'), () => this.onClickEscape());
+                        this.addActionButton(`fled_button-escape3`, _('Escape!'), () => this.onClickEscape());
                         const escapeButton = document.getElementById('fled_button-escape3');
                         escapeButton.insertAdjacentHTML('afterbegin', '<div id="fled_button-escape-icon" class="fled_action-button-icon"></div>');
                     }
@@ -1164,25 +1164,31 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
         ///////////////////////////////////////////////////
         //// Utility methods
 
-        invokeServerActionAsync(actionName, args) {
-            return new Promise((resolve, reject) => {
-                try {
-                    if (!this.checkAction(actionName)) {
-                        console.error(`Action '${actionName}' not allowed in ${this.currentState}`, args);
-                        return reject('Invalid');
+        async invokeServerActionAsync(actionName, args) {
+            try {
+                await new Promise((resolve, reject) => {
+                    try {
+                        if (!this.checkAction(actionName)) {
+                            console.error(`Action '${actionName}' not allowed in ${this.currentState}`, args);
+                            return reject('Invalid');
+                        }
+                        if (!this.amIActive) {
+                            console.error(`Action '${actionName}' not allowed for inactive player`, args);
+                            return reject('Invalid');
+                        }
+                        console.log(`Invoking server action: ${actionName}`, args);
+                        this.ajaxcall(`${BasePath}/${actionName}.html`, { lock: true, ...args }, () => {}, result => {
+                            result?.valid ? resolve() : reject(`${actionName} failed`);
+                        });
                     }
-                    if (!this.amIActive) {
-                        console.error(`Action '${actionName}' not allowed for inactive player`, args);
-                        return reject('Invalid');
+                    catch (err) {
+                        reject(err);
                     }
-                    this.ajaxcall(`${BasePath}/${actionName}.html`, { lock: true, ...args }, () => {}, result => {
-                        result?.valid ? resolve() : reject(`${actionName} failed`);
-                    });
-                }
-                catch (err) {
-                    reject(err);
-                }
-            });
+                });
+            }
+            finally {
+                console.log('Server action finished');
+            }
         },
 
         reflow(element = document.documentElement) {
@@ -2723,6 +2729,10 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 easing: 'ease-in',
                 fill: 'forwards',
             }).finished;
+
+            // Flip the prisoner tile
+            const prisonerTileDiv = document.getElementById(`fled_prisoner-tile-${playerId}`);
+            await this.transitionInAsync(prisonerTileDiv, 'fled_back');
         },
 
         async animatePlayerMoveAsync(playerId, x, y) {
@@ -3452,8 +3462,15 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             if (!fled.canEscape()) return;
             console.log('onClickEscape()');
 
+            const tools = fled.calculateToolsNeededToEscape();
+
             this.setClientState('client_selectTilesForEscape', {
-                descriptionmyturn: _("${you} must select tools to use for your escape"),
+                descriptionmyturn: _("${you} must select ${RT} to use for your escape"),
+                args: {
+                    RT: tools.reduce((html, _, i) => {
+                        return html + this.format_block('fled_Templates.actionBarResourceType', { TYPE: tools[i] })
+                    }, ''),
+                },
             });
         },
 
@@ -3607,7 +3624,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             this.scoreCounter[playerId].setValue(score);
         },
 
-        async notify_tilePlayed({ playerId, tile: tileId, x, y, o: orientation }) {
+        async notify_tilePlaced({ playerId, tile: tileId, x, y, o: orientation }) {
             // Update the internal game state
             fled.removeTileFromHand(playerId, tileId);
             fled.setTileAt(tileId, x, y, orientation);
@@ -3690,19 +3707,20 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             }
         },
 
-        async notify_tilesDrawn({ playerId, n, tileIds }) {
-            if (playerId == this.myPlayerId) {
-                for (const tileId of tileIds) {
-                    fled.drawTile(playerId, tileId);
-
-                    await this.animateDrawTileAsync(playerId, tileId);
-                    await this.delayAsync(100);
-                }
-            }
-            else {
+        async notify_tilesDrawn({ playerId, n }) {
+            if (playerId != this.myPlayerId) {
                 for (let i = 0; i < n; i++) {
                     fled.addTileToHand(playerId, 0);
                 }
+            }
+        },
+
+        async notify_tilesReceived({ tileIds }) {
+            for (const tileId of tileIds) {
+                fled.drawTile(this.myPlayerId, tileId);
+
+                await this.animateDrawTileAsync(this.myPlayerId, tileId);
+                await this.delayAsync(100);
             }
         },
 
@@ -3773,7 +3791,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
         async notify_unshackled({ playerId, tile: tileId, score }) {
             // Update internal state
-            fled.unshacklePlayer(playerId);
+            fled.unshacklePlayer(playerId, tileId);
             
             // Update the UI
             await this.animateShackleTileToGovernorsInventory(playerId, tileId);
@@ -3803,15 +3821,19 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             const player = fled.players[playerId];
             const [ x, y ] = player.pos;
 
-            // Scroll the player's tile into view
-            const { tileId } = unpackCell(fled.getTileAt(x, y));
-            const tileDiv = this.getTileDiv(tileId);
-            tileDiv.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+            // Scroll the board into view
+            const containerDiv = document.getElementById('fled_board-container');
+            containerDiv.scrollIntoView({ block: 'center', inline: 'center', behaviour: 'smooth' });
+            
+            await this.delayAsync(500);
 
             // Zoom in on the escaping player
             const headPos = fled.getTileHeadPos(x, y);
-            const { zoom } = this.calculateZoom({ x1: x - 2, y1: y - 2, x2: x + 2, y2: y + 2 });
-            await this.animateZoomToAsync(x, y, zoom);
+            const { zoom } = this.calculateZoom({ x1: headPos.x - 2, y1: headPos.y - 2, x2: headPos.x + 2, y2: headPos.y + 2 });
+
+            const xUnit = (headPos.x * 2) / FledWidth - 1;
+            const yUnit = (headPos.y * 2) / FledHeight - 1;
+            await this.animateZoomToAsync(xUnit, yUnit, zoom);
             
             await this.delayAsync(500);
 
@@ -3819,12 +3841,14 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             await this.animatePlayerMoveAsync(playerId, headPos.x, headPos.y);
             await this.animatePlayerEscape(playerId);
 
-            // TODO: flip over the prisoner tile
-
             // Update internal game state
             fled.escape(playerId);
 
             this.scoreCounter[playerId].setValue(score);
         },
+
+        async notify_turnEnded() {
+            fled.endTurn();
+        }
     });
 });

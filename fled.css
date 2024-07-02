@@ -8,11 +8,11 @@
  * -----
  */
 
- #game_play_area {
+#game_play_area {
     container-type: inline-size;
- }
+}
 
- #fled_body {
+#fled_body {
     position: relative;
     display: flex;
     justify-content: center;
@@ -1223,8 +1223,6 @@
 
 
 /* Log Images */
-
-.fled_log-moon {} /* KILL? */
     
 .fled_log-room {
     display: inline-block;
@@ -1259,23 +1257,37 @@
 .fled_log-npc-chaplain { background-position: -15em  -2.864em; }
 
 
-/* These .fled_log-item-* are unused... just here for reference */
-.fled_log-item-10 { background-position: -3.0em 0em; } /* button */
-.fled_log-item-11 { background-position:  0em   0em; } /* stamp */
-.fled_log-item-12 { background-position: -9.0em 0em; } /* comb */
-.fled_log-item-13 { background-position: -6.0em 0em; } /* cake */
-.fled_log-item-30 { background-position: -12.0em 0em; } /* shamrock */
+.fled_icon {
+    background-image: url(img/fled_icons.png);
+    background-size: 21em 8.6em;
+    background-repeat: no-repeat;
+    width: 3em;
+    height: 2.864em;
+    display: inline-block;
+    vertical-align: middle;
 
-.fled_log-item-20 { background-position: -3.0em -2.864em; } /* purple key */
-.fled_log-item-21 { background-position:  0em   -2.864em; } /* purple file */
-.fled_log-item-22 { background-position: -9.0em -2.864em; } /* purple boot */
-.fled_log-item-23 { background-position: -6.0em -2.864em; } /* purple spoon */
-.fled_log-item-40 { background-position: -12.0em -2.864em; } /* purple whistle */
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: auto;
+    image-rendering: smooth;
+    image-rendering: high-quality;
+}
+/* These .fled_icon-* are unused... just here for reference */
+.fled_icon-10 { background-position: -3.0em 0em; } /* button */
+.fled_icon-11 { background-position:  0em   0em; } /* stamp */
+.fled_icon-12 { background-position: -9.0em 0em; } /* comb */
+.fled_icon-13 { background-position: -6.0em 0em; } /* cake */
+.fled_icon-30 { background-position: -12.0em 0em; } /* shamrock */
 
-.fled_log-item-20.fled_gold { background-position: -3.0em -5.728em; } /* gold key */
-.fled_log-item-21.fled_gold { background-position:  0em   -5.728em; } /* gold file */
-.fled_log-item-22.fled_gold { background-position: -9.0em -5.728em; } /* gold boot */
-.fled_log-item-23.fled_gold { background-position: -6.0em -5.728em; } /* gold spoon */
+.fled_icon-20 { background-position: -3.0em -2.864em; } /* purple key */
+.fled_icon-21 { background-position:  0em   -2.864em; } /* purple file */
+.fled_icon-22 { background-position: -9.0em -2.864em; } /* purple boot */
+.fled_icon-23 { background-position: -6.0em -2.864em; } /* purple spoon */
+.fled_icon-40 { background-position: -12.0em -2.864em; } /* purple whistle */
+
+.fled_icon-20.fled_gold { background-position: -3.0em -5.728em; } /* gold key */
+.fled_icon-21.fled_gold { background-position:  0em   -5.728em; } /* gold file */
+.fled_icon-22.fled_gold { background-position: -9.0em -5.728em; } /* gold boot */
+.fled_icon-23.fled_gold { background-position: -6.0em -5.728em; } /* gold spoon */
 /* TODO: purple bone */
 /* TODO: moon */
 /* TODO: victory scroll */

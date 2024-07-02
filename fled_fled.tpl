@@ -144,6 +144,12 @@ const fled_Templates = {
     npcLog:
         '<span class="fled_log-npc fled_log-npc-${DATA}" tooltip="${TEXT}"></span>',
 
+    actionBarResourceType:
+        '<span ' +
+            'class="fled_icon fled_icon-${TYPE}" ' +
+            'data-type="${TYPE}" ' +
+        '></span>',
+
     confirmCountdown:
         '<svg ' +
             'version="1.1" ' +

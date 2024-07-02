@@ -32,4 +32,4 @@ RUN apk update && \
 
 WORKDIR /var/bga
 
-CMD ["phpunit.phar", "FledLogicTest.php"]
+CMD ["phpunit.phar", "--no-progress", "--testdox", "FledLogicTest.php"]
