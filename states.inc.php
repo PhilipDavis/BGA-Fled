@@ -15,6 +15,7 @@ if (!defined('BGA_STATE_START'))
 {
     define('BGA_STATE_START', 1);
     define('STATE_ADD_STARTER_TILE', 10);
+    define('STATE_DEBUG_SETSTATE', 11);
     define('STATE_ADD_TILE', 20);
     define('STATE_PLAY_TILES', 30);
     define('STATE_DRAW_TILES', 40);
@@ -42,9 +43,22 @@ $machinestates = [
         'description' => clienttranslate('${actplayer} must place a tile in the prison'),
         'descriptionmyturn' => clienttranslate('${you} must place your bunk tile in the prison'),
         'type' => 'activeplayer',
-        'possibleactions' => [ 'placeTile' ],
+        'possibleactions' => [ 'placeTile', 'debugSetState' ],
         'transitions' => [
             'nextPhase' => STATE_NEXT_TURN,
+            'debugSetState' => STATE_DEBUG_SETSTATE,
+        ],
+    ],
+
+    STATE_DEBUG_SETSTATE => [
+        'name' => 'debugSetState',
+        'type' => 'game',
+        'action' => 'stDebugSetState',
+        'updateGameProgression' => true,
+        'transitions' => [
+            'addTile' => STATE_ADD_TILE,
+            'playTiles' => STATE_PLAY_TILES,
+            'drawTiles' => STATE_DRAW_TILES,
         ],
     ],
 

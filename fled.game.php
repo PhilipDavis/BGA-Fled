@@ -130,11 +130,14 @@ class Fled extends Table implements FledEvents
     protected function getAllDatas()
     {
         $currentPlayerId = $this->getCurrentPlayerId();
-        $fled = $this->loadGameState();        
-        return [
+        $fled = $this->loadGameState();
+        $data = [
             'data' => $fled->getPlayerData($currentPlayerId),
             'scores' => $fled->getScores(),
         ];
+        if ($this->getBgaEnvironment() == 'studio')
+            $data['state'] = $fled->toJson();
+        return $data;
     }
 
     //
@@ -214,6 +217,18 @@ class Fled extends Table implements FledEvents
 //////////////////////////////////////////////////////////////////////////////
 //////////// Player actions
 ////////////
+
+    function action_debugSetState($json)
+    {
+        if ($this->getBgaEnvironment() != 'studio')
+            throw new Exception('Cannot set state in Production');
+
+        $this->trace(`** DEBUG setState: ` . $json);
+        $fled = FledLogic::fromJson($json, $this);
+        $this->saveGameState($fled);
+
+        $this->gamestate->nextState('debugSetState');
+    }
 
     //
     // When Player has no legal tiles to add to the prison, they must discard.
@@ -973,6 +988,20 @@ class Fled extends Table implements FledEvents
             $this->gamestate->nextState('nextTurn');
         else
             $this->gamestate->nextState('nextStarterTurn');
+    }
+
+    function stDebugSetState()
+    {
+        $fled = $this->loadGameState();
+        $playerId = $fled->getNextPlayerId();
+        $this->gamestate->changeActivePlayer($playerId);
+
+        if (!$fled->wasTilePlaced())
+            $this->gamestate->nextState('addTile');
+        else if ($fled->countActionsPlayed() >= 2)
+            $this->gamestate->nextState('drawTiles');
+        else
+            $this->gamestate->nextState('playTiles');
     }
 
 

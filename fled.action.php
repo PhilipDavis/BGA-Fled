@@ -26,6 +26,16 @@ class action_fled extends APP_GameAction
         }
   	}
   	
+    public function debugSetState()
+    {
+        self::setAjaxMode();
+        
+        $json = base64_decode(self::getArg('s', AT_base64, true));
+        $this->game->action_debugSetState($json);
+
+        self::ajaxResponse();
+    }
+  	
     public function placeTile()
     {
         self::setAjaxMode();

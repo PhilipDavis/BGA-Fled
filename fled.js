@@ -218,9 +218,50 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
             this.initPreferencesObserver();
 
-            const { data, scores } = gamedata;
+            const { data, scores, state } = gamedata;
             fled = new FledLogic(data, this.player_id);
-            window.fled = fled; // For convenience during debugging
+
+            // State is only sent when hosted from Studio
+            if (state) {
+                window.fled = fled; // For convenience during debugging
+                //addDebugUI(); // TODO
+
+                // KILL: move into core js
+                const menuDiv = document.getElementById('upperrightmenu');
+                if (menuDiv) {
+                    menuDiv.insertAdjacentHTML('afterbegin', '<div id="fled_debug-menu-button" class="upperrightmenu_item"><div class="fa fa-cloud-upload fa-lg" style="padding: 1em; cursor: pointer; margin-left: -1.25em;"></div></div>');
+                    const debugButtonDiv = document.getElementById('fled_debug-menu-button');
+                    debugButtonDiv?.addEventListener('click', () => {
+                        const pageDiv = document.getElementById('page-content');
+                        pageDiv.insertAdjacentHTML('beforeend', '<div id="fled_debug-set-state" style="position: fixed; padding: 1em; top: 15vh; left: 50%; width: 60vw; height: 70vh; display: grid; grid-template-rows: auto 1fr; border: solid .5em rgba(0, 0, 0, .75); transform: translate(-50%, 0%); background: rgba(196, 196, 169, .95); box-shadow: 0.5em 0.5em 1em rgba(0, 0, 0, .5);"><h2 style="margin-top: 0; font-size: 1.5em;">Set State</h2><form style="display: grid; width: 100%; grid-template-rows: 1fr auto;"><textarea style="resize: none; width: 100%; font-size: 1.25em; font-family: monospace;"></textarea><div style="margin-top: 1em; display: flex; gap: 1em;"><button type="submit" style="border: solid 1px black; width: auto; padding: .6em 1em; display: inline-block; cursor: pointer; border-radius: .3em;">Set State</button><button type="button" style="border: solid 1px black; width: auto; padding: .6em 1em; display: inline-block; cursor: pointer; border-radius: .3em;">Cancel</button></div></form></div>');
+                        const setStateDiv = document.getElementById('fled_debug-set-state');
+                        function close() {
+                            setStateDiv.parentElement.removeChild(setStateDiv);
+                        }
+                        const form = setStateDiv.querySelector('form');
+                        const textArea = form.querySelector('textarea');
+                        textArea.value = state;
+                        const cancelButton = form.querySelector('button[type="button"]');
+                        form.addEventListener('submit', e => {
+                            void (async () => {
+                                try {
+                                    await this.invokeServerActionAsync('debugSetState', {
+                                        s: btoa(textArea.value.trim()),
+                                    });
+                                    close();
+                                }
+                                catch (err) {
+                                    console.error(err);
+                                }
+                            })();
+                            e.preventDefault();
+                            return false;
+                        });
+                        cancelButton.addEventListener('click', close);
+                        textArea.focus();
+                    });
+                }
+            }
 
             this.toolTipText = {
                 'refZone-0': __('A *key* lets you move your pawn from one room to the next through any door, or doors, connecting them. /*Note:* Some “rooms” occupy the entire tile and are considered one room./'),
@@ -902,6 +943,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 }
                 case 'client_selectTileForInventory': {
                     // TODO: sticky on playerArea breaks this. try putting scroll anchor below the player area
+                    // TODO: the solution is scroll-margin-top/-left/-bottom?
                     const playerArea = document.getElementById(`fled_player-area-${this.myPlayerId}`);
                     const tilesDiv = playerArea.querySelector('.fled_player-area-tiles');
                     tilesDiv.scrollIntoView({ block: 'end', inline: 'center', behavior: 'smooth' });
@@ -921,7 +963,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 case 'client_selectTilesForEscape':
                     const playerArea = document.getElementById(`fled_player-area-${this.myPlayerId}`);
                     const tilesDiv = playerArea.querySelector('.fled_player-area-tiles');
-                    tilesDiv.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+                    tilesDiv.scrollIntoView({ block: 'end', inline: 'center', behavior: 'smooth' });
 
                     this.clientStateArgs.selectedInventoryTileIds = [];
                     this.makeTilesNonSelectable();
