@@ -2036,8 +2036,8 @@ six tiles... TODO
         }
 
         movePlayer(playerId, tileId, x, y) {
-            fled.discardTile(playerId, tileId);
-            fled.setPlayerPosition(playerId, x, y);
+            this.discardTile(playerId, tileId);
+            this.setPlayerPosition(playerId, x, y);
             if (playerId == this.myPlayerId) {
                 this.data.players[playerId].actionsPlayed++;
             }
@@ -2045,8 +2045,8 @@ six tiles... TODO
 
         sendToSolitaryConfinement(playerId) {
             const { x, y } = this.getTilePosition(SpecialTile.SolitaryConfinement);
-            fled.setPlayerPosition(playerId, x, y);
-            fled.players[playerId].inSolitary = true;
+            this.setPlayerPosition(playerId, x, y);
+            this.players[playerId].inSolitary = true;
         }
 
         unshacklePlayer(playerId, tileId) {
