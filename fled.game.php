@@ -223,7 +223,7 @@ class Fled extends Table implements FledEvents
         if ($this->getBgaEnvironment() != 'studio')
             throw new Exception('Cannot set state in Production');
 
-        $this->trace(`** DEBUG setState: ` . $json);
+        $this->warn(`** DEBUG setState: ` . $json);
         $fled = FledLogic::fromJson($json, $this);
         $this->saveGameState($fled);
 
@@ -238,6 +238,7 @@ class Fled extends Table implements FledEvents
         $playerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
+        $stateBefore = $fled->toJson();
         try
         {
             $fled->discardTile($tileId);
@@ -245,11 +246,11 @@ class Fled extends Table implements FledEvents
         catch (Throwable $e)
         {
             $refId = uniqid();
-            self::trace(implode(', ', [
+            $this->error(implode(', ', [
                 'Ref #' . $refId . ': discard failed',
                 'player: ' . $playerId,
-                'tileId: ' . $tileId,
-                'state: ' . $fled->toJson(),
+                'inputs: ' . json_encode([ $tileId ]),
+                'state: ' . $stateBefore,
                 'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
@@ -299,7 +300,7 @@ class Fled extends Table implements FledEvents
         $playerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
-
+        $stateBefore = $fled->toJson();
         try
         {
             $fled->placeTile($tileId, $x, $y, $orientation);
@@ -307,12 +308,12 @@ class Fled extends Table implements FledEvents
         catch (Throwable $e)
         {
             $refId = uniqid();
-            self::trace(implode(', ', [
+            $this->error(implode(', ', [
                 'Ref #' . $refId . ': placeTile failed',
                 'player: ' . $playerId,
                 'inputs: ' . json_encode([ $tileId, $x, $y, $orientation ]),
-                'state: ' . $fled->toJson(),
-                'ex:' . $e->getTraceAsString(),
+                'state: ' . $stateBefore,
+                'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
         }
@@ -377,6 +378,7 @@ class Fled extends Table implements FledEvents
         $playerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
+        $stateBefore = $fled->toJson();
         try
         {
             $fled->discardTileToMove($tileId, $x, $y);
@@ -384,11 +386,11 @@ class Fled extends Table implements FledEvents
         catch (Throwable $e)
         {
             $refId = uniqid();
-            self::trace(implode(', ', [
+            $this->error(implode(', ', [
                 'Ref #' . $refId . ': move failed',
                 'player: ' . $playerId,
                 'inputs: ' . json_encode([ $tileId, $x, $y ]),
-                'state: ' . $fled->toJson(),
+                'state: ' . $stateBefore,
                 'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
@@ -437,6 +439,7 @@ class Fled extends Table implements FledEvents
         $playerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
+        $stateBefore = $fled->toJson();
         $targetPlayerId = $p ? $fled->getPlayerIdByColorName($p) : null;
         try
         {
@@ -445,11 +448,11 @@ class Fled extends Table implements FledEvents
         catch (Throwable $e)
         {
             $refId = uniqid();
-            self::trace(implode(', ', [
+            $this->error(implode(', ', [
                 'Ref #' . $refId . ': moveWarder failed',
                 'player: ' . $playerId,
                 'inputs: ' . json_encode([ $tileId, $x, $y, $w, $p ]),
-                'state: ' . $fled->toJson(),
+                'state: ' . $stateBefore,
                 'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
@@ -606,6 +609,7 @@ class Fled extends Table implements FledEvents
         $playerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
+        $stateBefore = $fled->toJson();
         try
         {
             $fled->addTileToInventory($tileId, $discards);
@@ -613,11 +617,11 @@ class Fled extends Table implements FledEvents
         catch (Throwable $e)
         {
             $refId = uniqid();
-            self::trace(implode(', ', [
+            $this->error(implode(', ', [
                 'Ref #' . $refId . ': add failed',
                 'player: ' . $playerId,
-                'tileId: ' . $tileId,
-                'state: ' . $fled->toJson(),
+                'inputs: ' . json_encode([ $tileId, $discards ]),
+                'state: ' . $stateBefore,
                 'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
@@ -658,6 +662,7 @@ class Fled extends Table implements FledEvents
         $playerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
+        $stateBefore = $fled->toJson();
         try
         {
             $fled->surrenderTile($tileId);
@@ -665,11 +670,11 @@ class Fled extends Table implements FledEvents
         catch (Throwable $e)
         {
             $refId = uniqid();
-            self::trace(implode(', ', [
+            $this->error(implode(', ', [
                 'Ref #' . $refId . ': surrender failed',
                 'player: ' . $playerId,
-                'tileId: ' . $tileId,
-                'state: ' . $fled->toJson(),
+                'inputs: ' . json_encode([ $tileId ]),
+                'state: ' . $stateBefore,
                 'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
@@ -721,6 +726,7 @@ class Fled extends Table implements FledEvents
         $activePlayerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
+        $stateBefore = $fled->toJson();
         try
         {
             $fled->discardTilesToEscape($discards);
@@ -728,11 +734,11 @@ class Fled extends Table implements FledEvents
         catch (Throwable $e)
         {
             $refId = uniqid();
-            self::trace(implode(', ', [
+            $this->error(implode(', ', [
                 'Ref #' . $refId . ': escape failed',
                 'player: ' . $activePlayerId,
-                'state: ' . $fled->toJson(),
                 'input: ' . json_encode([ $discards ]),
+                'state: ' . $stateBefore,
                 'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
@@ -774,6 +780,7 @@ class Fled extends Table implements FledEvents
         $playerId = $this->validateCaller();
 
         $fled = $this->loadGameState();
+        $stateBefore = $fled->toJson();
         try
         {
             $fled->drawTiles($governorTileId);
@@ -781,11 +788,11 @@ class Fled extends Table implements FledEvents
         catch (Throwable $e)
         {
             $refId = uniqid();
-            self::trace(implode(', ', [
+            $this->error(implode(', ', [
                 'Ref #' . $refId . ': drawTiles failed',
                 'player: ' . $playerId,
-                'tileId: ' . $governorTileId,
-                'state: ' . $fled->toJson(),
+                'input: ' . json_encode([ $governorTileId ]),
+                'state: ' . $stateBefore,
                 'ex:' . $e,
             ]));
             throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
