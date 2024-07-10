@@ -3643,11 +3643,22 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             console.log(`Registered ${eventNames.length} event handlers`);
         },
 
-        async notify_tileDiscarded({ playerId, tileId }) {
+        async notify_tileDiscarded({ playerId, tile: tileId, gov }) {
             // Note: tileId is only sent when this player discards a tile
+            // or when a player is unable to play a tile (gov == true)
             fled.removeTileFromHand(playerId, tileId);
             if (tileId) {
-                await this.animateDiscardHandTileAsync(tileId);
+                if (gov) {
+                    if (playerId == this.myPlayerId) {
+                        await this.animateTileFromHandToGovernorInventoryAsync(tileId);
+                    }
+                    else {
+                        this.createTileInGovernorInventory(tileId);
+                    }
+                }
+                else {
+                    await this.animateDiscardHandTileAsync(tileId);
+                }
             }
         },
 

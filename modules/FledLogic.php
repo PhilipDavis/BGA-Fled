@@ -1422,12 +1422,12 @@ six tiles... TODO
     {
         $playerId = $this->getNextPlayerId();
 
-        // Move tile from player's hand to the discard pile
+        // Move tile from player's hand to the Governor's inventory
         $this->removeTileFromHand($tileId, $playerId);
-        $this->addTileToDiscardPile($tileId);
+        $this->data->governorInventory[] = $tileId;
 
         $this->eventHandlers->onUnableToAddTile($playerId);
-        $this->eventHandlers->onTileDiscarded($playerId, $tileId);
+        $this->eventHandlers->onTileDiscarded($playerId, $tileId, true);
 
         // Technically, the player hasn't added a tile...
         // but we're just using this flag to indicate that

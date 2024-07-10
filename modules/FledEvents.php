@@ -5,7 +5,7 @@ interface FledEvents
 {
     function onSetupComplete(array $playerPositions);
     function onUnableToAddTile($playerId);
-    function onTileDiscarded($activePlayerId, $tileId);
+    function onTileDiscarded(string $activePlayerId, int $tileId, bool $toGovernor);
     function onTilePlaced($playerId, $tileId, $x, $y, $orientation);
     function onTilePlayedToMove($playerId, $tileId, $x, $y, $tool, $path);
     function onTilePlayedToMoveWarder($activePlayerId, $targetPlayerId, $tileId, $x, $y, $npcName, $path);

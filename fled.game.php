@@ -268,8 +268,26 @@ class Fled extends Table implements FledEvents
         ]);
     }
 
-    function onTileDiscarded($activePlayerId, $tileId)
+    function onTileDiscarded($activePlayerId, $tileId, $toGovernor)
     {
+        if ($toGovernor)
+        {
+            // This is only used at the beginning of a turn when
+            // the player's tile is unable to be added to the prison.
+            $tile = FledLogic::$FledTiles[$tileId];
+            $itemId = $tile['contains'];
+            $this->notifyAllPlayers('tileDiscarded', clienttranslate('${playerName} surrenders ${_tile} to Governor\'s Inventory.'), [
+                'i18n' => [ '_tile' ],
+                'playerName' => $this->getPlayerNameById($activePlayerId),
+                '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
+                'playerId' => $activePlayerId,
+                'tile' => $tileId,
+                'gov' => $toGovernor,
+                'preserve' => [ 'playerId', 'tile', 'gov' ],
+            ]);
+            return;
+        }
+
         //
         // Send notifications to players
         //
@@ -280,8 +298,8 @@ class Fled extends Table implements FledEvents
                 $this->notifyPlayer($playerId, 'tileDiscarded', clienttranslate('${playerName} discards a tile'), [
                     'playerName' => $this->getPlayerNameById($playerId),
                     'playerId' => $activePlayerId,
-                    'tileId' => $tileId,
-                    'preserve' => [ 'tileId' ],
+                    'tile' => $tileId,
+                    'preserve' => [ 'playerId', 'tile' ],
                 ]);
             }
             else
