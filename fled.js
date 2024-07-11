@@ -848,6 +848,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                         this.makeTilesSelectable(eligibleTiles);
                     }
                     else {
+                        this.destroyAllSlots();
                         this.setClientState('client_discardTile', {
                             descriptionmyturn: _('None of your tiles can be added to the prison. ${you} must select one to discard'),
                         });
@@ -3686,12 +3687,17 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             this.createTileOnMiniMap(tileId, x, y, orientation);
 
             // Current player has already had the tile animated to the board
+            // (unless we're in archive mode!)
             if (playerId == this.myPlayerId) {
                 this.destroyRotateButton();
-                return;
-            }
 
-            await this.animateOpponentTileToBoardAsync(playerId, tileId, x, y, orientation);
+                if (g_archive_mode) {
+                    await this.animateTileFromHandToBoardAsync(tileId, x, y, orientation);
+                }
+            }
+            else {
+                await this.animateOpponentTileToBoardAsync(playerId, tileId, x, y, orientation);
+            }
         },
 
         async notify_setupComplete({ players }) {
