@@ -16,6 +16,8 @@ require_once('modules/FledEvents.php');
 
 class Fled extends Table implements FledEvents
 {
+    private FledLogic | null $fled;
+
 	function __construct()
 	{
         parent::__construct();
@@ -25,6 +27,8 @@ class Fled extends Table implements FledEvents
             //"houndExpansion" => 100, // TODO
             //"specterExpansion" => 101,
         ]);
+
+        $this->fled = null;
 	}
 	
     protected function getGameName()
@@ -163,8 +167,12 @@ class Fled extends Table implements FledEvents
 
     protected function loadGameState()
     {
-        $json = $this->getObjectFromDB("SELECT id, doc FROM game_state LIMIT 1")['doc'];
-        return FledLogic::fromJson($json, $this);
+        if (!$this->fled)
+        {
+            $json = $this->getObjectFromDB("SELECT id, doc FROM game_state LIMIT 1")['doc'];
+            $this->fled = FledLogic::fromJson($json, $this);
+        }
+        return $this->fled;
     }
 
     protected function saveGameState($fled)
@@ -981,7 +989,7 @@ class Fled extends Table implements FledEvents
 
     function stNextTurn()
     {
-        $fled = $this->loadGameState();
+        $fled = $this->fled; // Loaded earlier
 
         if ($fled->wasHardLaborCalled())
         {
