@@ -1572,9 +1572,8 @@ six tiles... TODO
         $x = $player->pos[0];
         $y = $player->pos[1];
 
-        // Everybody else gets one more turn
-        $finalTurns = $this->data->finalTurns ?? count($this->data->order);
-        $this->data->finalTurns = $finalTurns - 1;
+        // Start (or continue) counting down final turns
+        $this->data->finalTurns = $this->data->finalTurns ?? count($this->data->order);
 
         // Validate that the player can escape
         if (!$this->canPlayerEscape($playerId))
@@ -1930,6 +1929,9 @@ six tiles... TODO
         {
             $this->data->nextPlayer = ($this->data->nextPlayer + 1) % count($this->data->order);
 
+            if (isset($this->data->finalTurns))
+                $this->data->finalTurns--;
+
             $playerId = $this->getNextPlayerId();
             $this->data->players->$playerId->placedTile = false;
             $this->data->players->$playerId->actionsPlayed = 0;
@@ -2105,7 +2107,7 @@ six tiles... TODO
         // will be 100 - # of turns remaining (even when not
         // enough tiles to draw)
         $finalTurns = $this->data->finalTurns;
-        if ($finalTurns !== null)
+        if (isset($finalTurns))
             return 100 - $finalTurns;
 
         // Look at the total number of tiles that may be drawn
