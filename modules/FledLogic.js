@@ -1442,6 +1442,7 @@ six tiles... TODO
         escape(playerId) {
             const player = this.data.players[playerId];
             player.escaped = true;
+            player.pos = this.getTileHeadPos(player.pos[0], player.pos[1]);
 
             if (this.data.finalTurns === null) {
                 this.data.finalTurns = this.data.order.length;
@@ -1592,7 +1593,9 @@ six tiles... TODO
             const eligibleTileIds = [];
 
             const player = this.data.players[this.myPlayerId];
-            const toolsNeeded = this.calculateToolsNeededToLeaveRoom(player.pos[0], player.pos[1]);
+            if (!player.pos) return [];
+            const [ x, y ] = player.pos;
+            const toolsNeeded = this.calculateToolsNeededToLeaveRoom(x, y);
 
             for (const tileId of player.hand) {
                 const tile = Tiles[tileId];
@@ -2082,7 +2085,7 @@ six tiles... TODO
 
         canEscapeWith(tileIds) {
             const player = this.data.players[this.myPlayerId];
-            const [ x, y ] = player.pos;
+            const [ x, y ] = player.pos || [ -1, -1 ];
             if (x != 1 && x != FledWidth - 2 && y != 1 && y != FledHeight - 2) {
                 return false;
             }

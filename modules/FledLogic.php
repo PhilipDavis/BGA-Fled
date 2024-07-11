@@ -1612,6 +1612,7 @@ six tiles... TODO
         $this->eventHandlers->onInventoryDiscarded($playerId, $discards, $score);
 
         $this->data->players->$playerId->escaped = true;
+        $this->data->players->$playerId->pos = $this->getTileHeadPos($x, $y);
 
         $score = $this->getPlayerScore($playerId);
         $auxScore = $this->getPlayerAuxScore($playerId);
