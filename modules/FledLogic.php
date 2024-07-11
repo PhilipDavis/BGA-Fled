@@ -1373,8 +1373,6 @@ six tiles... TODO
 
     public function isTileInPlayersHand($tileId, $playerId)
     {
-        if (array_search($tileId, $this->data->players->$playerId->hand) === false)
-            throw new Exception(json_encode([ 'tile' => $tileId, 'player' => $this->data->players->$playerId->hand ])); // KILL
         return array_search($tileId, $this->data->players->$playerId->hand) !== false;
     }
 
