@@ -2760,17 +2760,18 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
         },
 
         async animatePlayerEscape(playerId) {
-            const player = fled.players[playerId];
-            const name = MeepleNames[player.color];
-            const meepleDiv = document.getElementById(`fled_meeple-${name}`);
-
-            await meepleDiv.animate({
-                opacity: [ 0 ],
-            }, {
-                duration: LongDuration,
-                easing: 'ease-in',
-                fill: 'forwards',
-            }).finished;
+            //// Mark wants the player's meeple to remain visible in the forest
+            // const player = fled.players[playerId];
+            // const name = MeepleNames[player.color];
+            // const meepleDiv = document.getElementById(`fled_meeple-${name}`);
+            //
+            // await meepleDiv.animate({
+            //     opacity: [ 0 ],
+            // }, {
+            //     duration: LongDuration,
+            //     easing: 'ease-in',
+            //     fill: 'forwards',
+            // }).finished;
 
             // Flip the prisoner tile
             const prisonerTileDiv = document.getElementById(`fled_prisoner-tile-${playerId}`);
@@ -3890,7 +3891,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             
             await this.delayAsync(500);
 
-            // Move to the forest and then fade away
+            // Move to the forest
             await this.animatePlayerMoveAsync(playerId, headPos.x, headPos.y);
             await this.animatePlayerEscape(playerId);
 
