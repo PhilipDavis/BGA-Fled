@@ -172,24 +172,33 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             //
             aspect.before(dojo.string, "substitute", (template, map, transform) => {
                 if (typeof map === 'object') {
-                    for (const [ key, value ] of Object.entries(map)) {
-                        const match = /^_(?<dataKey>\D+)(?<index>\d*)$/.exec(key);
-                        if (match) {
-                            // This key/value pair is strictly for the replay logs, which don't have access
-                            // to the images, CSS, nor JavaScript of the game page. We want to replace them
-                            // with rich content for the in-game log.  Strip the leading underscore to find
-                            // the name of the data key (which must have been sent from server side) and we
-                            // replace the old key with the rich content.
-                            const { dataKey, index } = match.groups;
-                            const dataValue = map[`${dataKey}${index}`];
-                            if (dataValue !== undefined) {
-                                map[key] = this.format_block(`${BgaGameId}_Templates.${dataKey}Log`, {
-                                    DATA: dataValue.toString(),
-                                    INDEX: index,
-                                    TEXT: value.toString(),
-                                });
+                    const alteredMap = { ...map };
+                    try {
+                        for (const [ key, value ] of Object.entries(map)) {
+                            const match = /^_(?<dataKey>\D+)(?<index>\d*)$/.exec(key);
+                            if (match) {
+                                // This key/value pair is strictly for the replay logs, which don't have access
+                                // to the images, CSS, nor JavaScript of the game page. We want to replace them
+                                // with rich content for the in-game log.  Strip the leading underscore to find
+                                // the name of the data key (which must have been sent from server side) and we
+                                // replace the old key with the rich content.
+                                const { dataKey, index } = match.groups;
+                                const dataValue = map[`${dataKey}${index}`];
+                                if (dataValue !== undefined) {
+                                    alteredMap[key] = this.format_block(`${BgaGameId}_Templates.${dataKey}Log`, {
+                                        DATA: dataValue.toString(),
+                                        INDEX: index,
+                                        TEXT: value.toString(),
+                                    });
+                                }
                             }
                         }
+                        return [ template, alteredMap, transform, this ];
+                    }
+                    catch (err) {
+                        // Defer to the original BGA implementation.
+                        // (e.g. some of the log messages have "_inherited" and "inherited",
+                        // which breaks my logic of using the underscore prefix)
                     }
                 }
                 return [ template, map, transform, this ];
