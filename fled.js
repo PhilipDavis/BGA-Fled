@@ -585,7 +585,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             }
 
             // Hide the fourth slot if the player doesn't have a shamrock in inventory
-            if ((playerId == this.myPlayerId && !fled.playerHasShamrockInInventory()) || (playerId != this.myPlayerId && inventory < 4)) {
+            if (!fled.playerHasShamrockInInventory(playerId)) {
                 document.getElementById(`fled_inventory-${playerId}-slot-3`).classList.add('fled_hidden');
             }
             for (let i = 0; i < inventory.length; i++) {
@@ -3681,8 +3681,11 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 await this.animateCloseGapInInventoryAsync(playerId);
             }
 
-            if ((playerId == this.myPlayerId && !fled.playerHasShamrockInInventory()) || (playerId != this.myPlayerId && fled.players[playerId].inventory < 4)) {
+            if (!fled.playerHasShamrockInInventory(playerId)) {
                 document.getElementById(`fled_inventory-${playerId}-slot-3`).classList.add('fled_hidden');
+            }
+            else {
+                document.getElementById(`fled_inventory-${playerId}-slot-3`).classList.remove('fled_hidden');
             }
 
             this.scoreCounter[playerId].setValue(score);
@@ -3733,9 +3736,8 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             const player = fled.players[playerId];
             const slotIndex = player.inventory.length;
 
-            const count = fled.addTileToInventory(playerId, tileId);
-
-            if ((playerId == this.myPlayerId && fled.playerHasShamrockInInventory()) || (playerId != this.myPlayerId && count >= 4)) {
+            fled.addTileToInventory(playerId, tileId);
+            if (fled.playerHasShamrockInInventory(playerId)) {
                 document.getElementById(`fled_inventory-${playerId}-slot-3`).classList.remove('fled_hidden');
             }
 

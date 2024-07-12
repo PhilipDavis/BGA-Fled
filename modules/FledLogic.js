@@ -1876,7 +1876,7 @@ six tiles... TODO
             // Cannot add any tiles while in solitary confinement
             if (player.inSolitary) return [];
 
-            const hasShamrock = !!player.inventory.find(tileId => Tiles[tileId].contains == ItemType.Shamrock);
+            const hasShamrock = this.playerHasShamrockInInventory(this.myPlayerId);
 
             // If meeple is in a room that matches rooms shown on the current whistle
             // roll call tile then the player may add the associated contraband.
@@ -2250,8 +2250,8 @@ six tiles... TODO
             return this.data.npcs;
         }
 
-        playerHasShamrockInInventory() {
-            return !!this.data.players[this.myPlayerId].inventory.find(tileContains(ItemType.Shamrock));
+        playerHasShamrockInInventory(playerId) {
+            return !!this.data.players[playerId].inventory.find(tileContains(ItemType.Shamrock));
         }
 
         addNpc(name, x, y) {
