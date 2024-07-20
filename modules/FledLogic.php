@@ -1641,8 +1641,10 @@ six tiles... TODO
         return null;
     }
 
-    public function discardTileToMoveWarder($tileId, $x, $y, $npcName, $targetPlayerId)
+    public function discardTileToMoveWarder($tileId, $x, $y, $npcName, $targetPlayerColor)
     {
+        $targetPlayerId = $targetPlayerColor ? $this->getPlayerIdByColorName($targetPlayerColor) : null;
+
         $toBunk = false;
         $toSolitary = false;
         $targetIsSafe = false;
@@ -1727,7 +1729,7 @@ six tiles... TODO
                             // Otherwise, send player back to his bunk and remove shackles
                             $bunkTileId = $this->getStartingBunkTileId($targetPlayerId);
                             $this->data->players->$targetPlayerId->pos = $this->getTilePosition($bunkTileId);
-                            $unshackleTile = $this->data->players->$targetPlayerId->shackleTile;
+                            $unshackleTile = $targetPlayer->shackleTile;
                             $this->data->players->$targetPlayerId->shackleTile = 0;
                             $this->data->governorInventory[] = $unshackleTile;
                             $toBunk = true;

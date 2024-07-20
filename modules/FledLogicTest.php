@@ -296,6 +296,7 @@ final class FledLogicTest extends TestCase
         $tileId = 44;
         $x = 8;
         $y = 5;
+        $p = 'blue';
         $targetPlayerId = $fled->getPlayerIdByColorName('blue');
 
         $this->assertFalse($fled->isSafeForRollCall($x, $y), 'Target room should not be considered safe');
@@ -311,7 +312,7 @@ final class FledLogicTest extends TestCase
         $mockEvents->expects($this->never())->method('onPlayerUnshackled');
 
 
-        $fled->discardTileToMoveWarder($tileId, $x, $y, 'warder1', $targetPlayerId);
+        $fled->discardTileToMoveWarder($tileId, $x, $y, 'warder1', $p);
 
         $this->assertTrue(true);
     }

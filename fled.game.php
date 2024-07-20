@@ -466,10 +466,9 @@ class Fled extends Table implements FledEvents
 
         $fled = $this->loadGameState();
         $stateBefore = $fled->toJson();
-        $targetPlayerId = $p ? $fled->getPlayerIdByColorName($p) : null;
         try
         {
-            $fled->discardTileToMoveWarder($tileId, $x, $y, $w, $targetPlayerId);
+            $fled->discardTileToMoveWarder($tileId, $x, $y, $w, $p);
         }
         catch (Throwable $e)
         {
