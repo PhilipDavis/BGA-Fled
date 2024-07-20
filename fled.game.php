@@ -473,14 +473,25 @@ class Fled extends Table implements FledEvents
         catch (Throwable $e)
         {
             $refId = uniqid();
-            $this->error(implode(', ', [
-                'Ref #' . $refId . ': moveWarder failed',
-                'player: ' . $playerId,
-                'inputs: ' . json_encode([ $tileId, $x, $y, $w, $p ]),
-                'state: ' . $stateBefore,
-                'ex:' . $e,
-            ]));
-            throw new BgaVisibleSystemException("Invalid operation - Ref #" . $refId); // NOI18N
+            $test = implode(' ', [
+                'function testRef' . $refId . '() {',
+                '    $fled = $this->loadFromJson(',
+                "       '" . $stateBefore . "'",
+                '    );',
+                '    $playerId = ' . $playerId . ';',
+                '    $tileId = ' . $tileId . ';',
+                '    $x = ' . $x . ';',
+                '    $y = ' . $y . ';',
+                '    $w = "' . $w . '";',
+                '    $p = "' . $p . '";',
+                '',
+                '    $fled->discardTileToMoveWarder($tileId, $x, $y, $w, $p);',
+                '',
+                '    $this->assertTrue(true);',
+                '}',
+            ]);
+            $this->error($test);
+            throw new Exception("Invalid operation - Ref #" . $refId); // NOI18N
         }
 
         $this->saveGameState($fled);

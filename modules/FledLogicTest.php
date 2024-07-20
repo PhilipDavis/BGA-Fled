@@ -77,6 +77,12 @@ final class FledLogicTest extends TestCase
             ->getMock();
     }
 
+    private function loadFromJson(string $json)
+    {
+        $this->events = $this->createMockEvents();
+        return FledLogic::fromJson($json, $this->events);
+    }
+
     public function testTileOnBoard()
     {
         $mockEvents = $this->createMockEvents();
