@@ -2178,6 +2178,12 @@ six tiles... TODO
 
         getPlayersAt(x, y) {
             const result = [];
+            const { tileId } = unpackCell(this.getTileAt(x, y));
+            if (isDoubleTile(tileId)) {
+                const headPos = this.getTileHeadPos(x, y);
+                x = headPos.x;
+                y = headPos.y;
+            }
             for (const { color, pos, inSolitary } of Object.values(this.data.players)) {
                 if (!pos) continue; // pos is null until starting bunk is played
                 if (pos[0] === x && pos[1] === y && !inSolitary) {
