@@ -9,8 +9,8 @@ interface FledEvents
     function onTilePlaced($playerId, $tileId, $x, $y, $orientation);
     function onTilePlayedToMove($playerId, $tileId, $x, $y, $tool, $path);
     function onTilePlayedToMoveWarder($activePlayerId, $targetPlayerId, $tileId, $x, $y, $npcName, $path);
-    function onPlayerShackled($activePlayerId, $targetPlayerId, $shackleTile, $score);
-    function onPlayerUnshackled($playerId, $unshackleTile, $score);
+    function onPlayerShackled($activePlayerId, $targetPlayerId, $shackleTile, $score, $auxScore);
+    function onPlayerUnshackled($playerId, $unshackleTile, $score, $auxScore);
     function onPlayerSentToBunk($playerId);
     function onPlayerSentToSolitary($playerId);
     function onPlayerIsSafe($playerId, $roomType);
@@ -21,7 +21,7 @@ interface FledEvents
     function onTookFromGovernor($playerId, $tileId);
     function onTilesDrawn($activePlayerId, $drawnBeforeShuffle, $drawnAfterShuffle, $drawPileSize);
     function onTileAddedToInventory($playerId, $tileId, $discards, $score, $auxScore);
-    function onInventoryDiscarded($playerId, $discards, $score);
+    function onInventoryDiscarded($playerId, $discards, $score, $auxScore);
     function onTileSurrendered($activePlayerId, $tileId);
     function onPlayerEscaped($playerId, $score, $auxScore);
     function onEndTurn();

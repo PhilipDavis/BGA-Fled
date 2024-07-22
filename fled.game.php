@@ -544,10 +544,13 @@ class Fled extends Table implements FledEvents
         ]);
     }
 
-    function onPlayerShackled($activePlayerId, $targetPlayerId, $shackleTile, $score)
+    function onPlayerShackled($activePlayerId, $targetPlayerId, $shackleTile, $score, $auxScore)
     {
         $this->incStat(1, 'shackled', $targetPlayerId);
         $this->incStat(1, 'shackled_opponents', $activePlayerId);
+        
+        // Update player score in database
+        $this->setPlayerScore($targetPlayerId, $score, $auxScore);
 
         foreach ($this->players as $playerId => $player)
         {
@@ -573,11 +576,14 @@ class Fled extends Table implements FledEvents
         }
     }
 
-    function onPlayerUnshackled($targetPlayerId, $unshackleTile, $score)
+    function onPlayerUnshackled($targetPlayerId, $unshackleTile, $score, $auxScore)
     {
+        // Update player score in database
+        $this->setPlayerScore($targetPlayerId, $score, $auxScore);
+
         $tile = FledLogic::$FledTiles[$unshackleTile];
         $itemId = $tile['contains'];
-        $this->notifyAllPlayers('unshackled', clienttranslate('${playerName} is <b>unshackled</b>; ${_tile} surrendered to Governor\'s Inventory.'), [
+        $this->notifyAllPlayers('unshackled', clienttranslate('${playerName} is <b>unshackled</b>; ${_tile} is surrendered to Governor\'s Inventory.'), [
             'i18n' => [ '_tile' ],
             'playerName' => $this->getPlayerNameById($targetPlayerId),
             'playerId' => $targetPlayerId,
@@ -912,8 +918,11 @@ class Fled extends Table implements FledEvents
         }
     }
 
-    function onInventoryDiscarded($playerId, $discards, $score)
+    function onInventoryDiscarded($playerId, $discards, $score, $auxScore)
     {
+        // Update player score in database
+        $this->setPlayerScore($playerId, $score, $auxScore);
+
         //
         // Send notifications to players
         //

@@ -1605,8 +1605,9 @@ six tiles... TODO
             $this->removeTileFromInventory($tileId, $playerId);
 
         $score = $this->getPlayerScore($playerId);
+        $auxScore = $this->getPlayerAuxScore($playerId);
     
-        $this->eventHandlers->onInventoryDiscarded($playerId, $discards, $score);
+        $this->eventHandlers->onInventoryDiscarded($playerId, $discards, $score, $auxScore);
 
         $this->data->players->$playerId->escaped = true;
         $this->data->players->$playerId->pos = $this->getTileHeadPos($x, $y);
@@ -1758,10 +1759,10 @@ six tiles... TODO
             $this->eventHandlers->onPlayerSentToBunk($targetPlayerId);
 
         if ($shackleTile)
-            $this->eventHandlers->onPlayerShackled($playerId, $targetPlayerId, $shackleTile, $this->getPlayerScore($targetPlayerId));
+            $this->eventHandlers->onPlayerShackled($playerId, $targetPlayerId, $shackleTile, $this->getPlayerScore($targetPlayerId), $this->getPlayerAuxScore($targetPlayerId));
 
         if ($unshackleTile)
-            $this->eventHandlers->onPlayerUnshackled($targetPlayerId, $unshackleTile, $this->getPlayerScore($targetPlayerId));
+            $this->eventHandlers->onPlayerUnshackled($targetPlayerId, $unshackleTile, $this->getPlayerScore($targetPlayerId), $this->getPlayerAuxScore($targetPlayerId));
 
         if ($toSolitary)
             $this->eventHandlers->onPlayerSentToSolitary($targetPlayerId);
@@ -1816,7 +1817,8 @@ six tiles... TODO
             $this->removeTileFromInventory($discardTileId, $playerId);
 
         $score = $this->getPlayerScore($playerId);
-        $this->eventHandlers->onInventoryDiscarded($playerId, $discards, $score);
+        $auxScore = $this->getPlayerAuxScore($playerId);
+        $this->eventHandlers->onInventoryDiscarded($playerId, $discards, $score, $auxScore);
 
         // Remove the card from the player's hand
         // And add it to the player's inventory
