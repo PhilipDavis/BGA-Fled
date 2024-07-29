@@ -300,6 +300,9 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 // TODO: 'extras/fled_tiles3.png',
             ]);
 
+            document.getElementById('fled_board-button-collapse')?.addEventListener('click', () => this.onClickCollapseMap());
+            document.getElementById('fled_board-button-expand')?.addEventListener('click', () => this.onClickExpandMap());            
+
             this.createMiniMap();
             this.instantZoomTo(0, 0, 1);
             this.animateSmartZoomAsync();
@@ -2918,6 +2921,29 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             const x = 2 * offsetX / currentTarget.clientWidth - 1;
             const y = 2 * offsetY / currentTarget.clientHeight - 1;
             await this.animateZoomToAsync(x, y, this.clientStateArgs.currentScale);
+        },
+
+        async onClickExpandMap() {
+            document.getElementById('fled_board-button-expand').classList.add('fled_hidden');
+            const container = document.getElementById('fled_board-container');
+            container.style.height = '69.17em';
+            this.reflow(container);
+            const { zoom } = this.calculateZoom({ x1: -1, y1: -1, x2: FledWidth + 1, y2: FledHeight + 1 });
+            await this.animateZoomToAsync(0, 0, zoom);
+            this.showHideMiniMap();
+            this.clientStateArgs.boardContainerExpanded = true;
+            document.getElementById('fled_board-button-collapse').classList.remove('fled_hidden');
+        },
+
+        async onClickCollapseMap() {
+            document.getElementById('fled_board-button-collapse').classList.add('fled_hidden');
+            const container = document.getElementById('fled_board-container');
+            container.style.height = '32em';
+            this.reflow(container);
+            await this.animateSmartZoomAsync(true);
+            this.showHideMiniMap();
+            this.clientStateArgs.boardContainerExpanded = false;
+            document.getElementById('fled_board-button-expand').classList.remove('fled_hidden');
         },
 
         async onClickBoardTile(tileId) {

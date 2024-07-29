@@ -17,6 +17,12 @@
             <div id="fled_board-container">
                 <div id="fled_board" style="transform: scale(2);"></div>
             </div>
+            <div id="fled_board-button-expand" class="fled_board-button">
+                <i class="fa fa-expand"></i>
+            </div>
+            <div id="fled_board-button-collapse" class="fled_board-button fled_hidden">
+                <i class="fa fa-compress"></i>
+            </div>
         </div>
         <div id="fled_player-areas" class="fled_sticky"></div>
     </div>

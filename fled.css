@@ -85,6 +85,32 @@
     transition: transform .4s ease-out;
 }
 
+.fled_board-button {
+    position: absolute;
+    left: 0;
+    bottom: -2em;
+    width: 4em;
+    height: 4em;
+    border: solid .1em black;
+    background-color: #fff;
+    border-radius: 2em;
+    box-shadow: .2em .2em .2em rgba(0, 0, 0, .2);
+    cursor: pointer;
+    z-index: 10;
+}
+.fled_board-button i {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 2.5em;
+}
+#fled_board-button-expand {
+}
+#fled_board-button-collapse {
+}
+
+
 #fled_board .fled_tile {
     transition: none;
 }
