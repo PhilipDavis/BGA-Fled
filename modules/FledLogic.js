@@ -2350,6 +2350,14 @@ six tiles... TODO
             return this.data.whistlePos;
         }
 
+        startHardLabor() {
+            this.data.npcs.warder1.pos = [ 6, 6 ];
+            for (const player of Object.values(this.data.players)) {
+                player.pos = [ 6, 6 ];
+            }
+            this.data.hardLabor = true;
+        }
+
         get whistlePos() {
             return this.data.whistlePos;
         }

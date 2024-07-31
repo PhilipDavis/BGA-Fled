@@ -3903,6 +3903,38 @@ function (dojo, declare,
             fled.escape(playerId);
 
             this.scoreCounter[playerId].setValue(score);
+
+            // Zoom out to full board
+            await this.delayAsync(1000);
+            const { zoom } = this.calculateZoom({ x1: 0, y1: 0, x2: FledWidth, y2: FledHeight });
+            await this.animateZoomToAsync(0, 0, zoom);
+        },
+
+        async notify_hardLabor() {
+            fled.startHardLabor();
+            
+            // Move warder1 to the starting yard tile
+            const promises = [
+                this.animateMeepleMoveAsync('warder1', 6, 6, this.instantaneousMode),
+            ];
+
+            // Move the player meeples to the starting yard tile
+            promises.push(
+                ...Object.values(fled.players).map(async (player, i) => {
+                    if (player.escaped) return;
+                    await this.delayAsync(500 + i * 50);
+                    const name = MeepleNames[player.color];
+                    await this.animateMeepleMoveAsync(name, 6, 6, this.instantaneousMode);
+                })
+            );
+
+            // Zoom in on the yard tile
+            promises.push((async () => {
+                await this.delayAsync(500);
+                await this.animateZoomToAsync(0, 0, 1);
+            })());
+
+            await Promise.all(promises);
         },
 
         async notify_turnEnded() {
