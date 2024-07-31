@@ -10,13 +10,17 @@
 
 define([
     "dojo","dojo/_base/declare",
-    "dojo/aspect", // To facilitate the insertion of HTML markup into log entries
+    "bgagame/modules/PhilsUtils/PhilsUtils.core.v1",
     "bgagame/modules/FledLogic",
     "bgagame/modules/BounceFactory",
     "ebg/core/gamegui",
     "ebg/counter",
 ],
-function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFactory }) {
+function (dojo, declare,
+    { install, formatBlock, mapValues, applyMarkup, createFromTemplate, stringFromTemplate, invokeServerActionAsync },
+    FledLogicModule,
+    { animateDropAsync, bounceFactory }
+) {
     const BgaGameId = `fled`;
     const BasePath = `${BgaGameId}/${BgaGameId}`;
 
@@ -152,67 +156,15 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
         Enabled: 3,
     };
 
-    // Helper function to put HTML markup into translated strings
-    function __(text) {
-        return bga_format(_(text), {
-            '/': t => `<i>${t}</i>`,
-            '*': t => `<b>${t}</b>`,
-            '_': t => `<u>${t}</u>`,
-            '|': t => `<br/>`,
-        });
-    };
-
     return declare(`bgagame.${BgaGameId}`, ebg.core.gamegui, {
         constructor() {
             console.log(`${BgaGameId} constructor`);
             this.clientStateArgs = {
             };
 
-            //
-            // Intercept calls for string substitution so we can inject rich content into log entries
-            //
-            aspect.before(dojo.string, "substitute", (template, map, transform) => {
-                if (typeof map === 'object') {
-                    const alteredMap = { ...map };
-                    try {
-                        for (const [ key, value ] of Object.entries(map)) {
-                            const match = /^_(?<dataKey>\D+)(?<index>\d*)$/.exec(key);
-                            if (match) {
-                                // This key/value pair is strictly for the replay logs, which don't have access
-                                // to the images, CSS, nor JavaScript of the game page. We want to replace them
-                                // with rich content for the in-game log.  Strip the leading underscore to find
-                                // the name of the data key (which must have been sent from server side) and we
-                                // replace the old key with the rich content.
-                                const { dataKey, index } = match.groups;
-                                const dataValue = map[`${dataKey}${index}`];
-                                if (dataValue !== undefined) {
-                                    alteredMap[key] = this.format_block(`${BgaGameId}_Templates.${dataKey}Log`, {
-                                        DATA: dataValue.toString(),
-                                        INDEX: index,
-                                        TEXT: value.toString(),
-                                    });
-                                }
-                            }
-                        }
-                        return [ template, alteredMap, transform, this ];
-                    }
-                    catch (err) {
-                        // Defer to the original BGA implementation.
-                        // (e.g. some of the log messages have "_inherited" and "inherited",
-                        // which breaks my logic of using the underscore prefix)
-                    }
-                }
-                return [ template, map, transform, this ];
-            });
-
             this.scoreCounter = {};
 
             Object.defineProperties(this, {
-                currentState: {
-                    get() {
-                        return this.gamedatas.gamestate.name;
-                    },
-                },
                 amIActive: {
                     get() {
                         return parseInt(this.gamedatas.gamestate.active_player, 10);
@@ -226,7 +178,9 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
         setup(gamedata) {
             console.log('Starting game setup', gamedata);
 
-            this.initPreferencesObserver();
+            // Hook into this object and overwrite default BGA functions with enhanced functions
+            // Note: on Studio, the complete server state is sent to the client
+            install(dojo, this, 'fled_surface', { debug: false /*!!gamedata.state*/ });
 
             const { data, scores, state } = gamedata;
             fled = new FledLogic(data, this.player_id);
@@ -255,7 +209,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                         form.addEventListener('submit', e => {
                             void (async () => {
                                 try {
-                                    await this.invokeServerActionAsync('debugSetState', {
+                                    await invokeServerActionAsync('debugSetState', fled.moveNumber, {
                                         s: btoa(textArea.value.trim()),
                                     });
                                     close();
@@ -273,28 +227,28 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 }
             }
 
-            this.toolTipText = {
-                'refZone-0': __('A *key* lets you move your pawn from one room to the next through any door, or doors, connecting them. /*Note:* Some “rooms” occupy the entire tile and are considered one room./'),
-                'refZone-1': __('A *shoe* lets you move your pawn from one room to the next through *two* adjacent archways. A single archway connected to a door or window would require a key or file, respectively.'),
-                'refZone-2': __('A *file* lets you move your pawn from one room to the next through a window, or windows, connecting them'),
-                'refZone-3': __('A *spoon* lets you move your pawn from one room with a tunnel to any other room with a tunnel up to three (six if doubled) orthogonal rooms away.'),
-                'refZone-4': __('A *shamrock* is a good-luck charm and gives you special privileges! First, it is “*wild*” and may count as any singleuse tool.'),
-                'refZone-5': __('A tool on a *purple scroll* costs 1 contraband item'),
-                'refZone-6': __('A tool on a *gold scroll* doubles the symbol’s effect.'),
-                'refZone-7': __('A *shamrock* or a tool on a *gold scroll* costs 2 contraband items.'),
-                'refZone-8': __('A *whistle* lets you activate and move one warder 0-3 rooms and then target any prisoner occupying his same room. Warders may move through archways or doors, but not tunnels or windows!'),
-                'refZone-9': __('If your meeple is in a *warder’s quarters*, or in the same room with the *chaplain*, you may transfer a tool or shamrock from your hand to your inventory by paying the cost in contraband items from your inventory.  /Thematically, you are sneakily trading contraband for escape tools or a good-luck charm!/'),
-                'prisZone-0': __('*Step 1: Add 1 Tile to the Prison* || At the beginning of your turn, you _must_ *add a tile* from your hand to the prison |||| *Placement Rules* || First, you _must_ lay a tile with a *Gold Scroll* if possible. |||| Second, you must connect at least one-half of your tile to a matching room type (yard to a yard), and you may never place a tile in a way that connects a *door* to a *window* |||| Third, the Forest must make up the perimeter of the prison, which is exactly six squares from the starting tile, and never closer. No other room type may occupy the sixth square, nor may you add rooms beyond the sixth square. |||| If none of the tiles in your hand can be added to the prison, you must discard one tile to the *Governor’s inventory*'),
-                'prisZone-1': __('*Step 2: Play 2 More Tiles* || *2a. Discard a tile to move your pawn or a warder* || Tile items depicted on the purple and gold scrolls are *tools*. When discarded from your hand, tools allow you to move your pawn (or a warder if playing a whistle) orthogonally from room to room. A tool on a *gold scroll* doubles the symbol’s effect. A *shamrock* is *“wild”* and may count as any single-use tool'),
-                'prisZone-2': __('*Step 2: Play 2 More Tiles* || *2b. Surrender a tile into the Governor’s inventory* || If you have unplayable tiles, or hope to draw better tiles, surrender a tile to the Governor! Simply place it face up to the right of Governor in his inventory. /Tip: While tiles in the Governor’s inventory may be drawn by other players, they can also be drawn by you later/'),
-                'prisZone-3': __('*Step 2: Play 2 More Tiles* || *2c. Add a tile to your inventory* || Tile items depicted on the teal scrolls are *contraband*. If your meeple is in a room matching either of the *room posters* on the roll call tile with the whistle charm, you may transfer the matching contraband item from your hand face up into your inventory at no cost. /Thematically, you are finding contraband in that room!/ |||| If your meeple is in a *warder’s quarters*, or in the same room with the *chaplain*, you may transfer a tool or shamrock from your hand to your inventory by paying the cost in contraband items from your inventory. /Thematically, you are sneakily trading contraband for escape tools or a good-luck charm!/'),
-                'prisZone-4': __('*Step 3: Replenish Your Hand* || Replenish your hand back up to 5 tiles by drawing from the draw stacks. If you wish, _one_ of the tiles drawn _may_ come from the *Governor’s inventory*. '),
-                'prisZone-5': __('Your inventory is to the right of your prisoner tile and can hold up to 3 tiles (4 if you have one or more *shamrocks* in your inventory)'),
-                'cbZone-0': __('Stamps in The Bunks'),
-                'cbZone-1': __('Combs in The Washroom'),
-                'cbZone-2': __('Buttons in The Yard'),
-                'cbZone-3': __('Plum Cake in The Mess Hall'),
-            };
+            this.toolTipText = mapValues({
+                'refZone-0': _('A *key* lets you move your pawn from one room to the next through any door, or doors, connecting them. /*Note:* Some “rooms” occupy the entire tile and are considered one room./'),
+                'refZone-1': _('A *shoe* lets you move your pawn from one room to the next through *two* adjacent archways. A single archway connected to a door or window would require a key or file, respectively.'),
+                'refZone-2': _('A *file* lets you move your pawn from one room to the next through a window, or windows, connecting them'),
+                'refZone-3': _('A *spoon* lets you move your pawn from one room with a tunnel to any other room with a tunnel up to three (six if doubled) orthogonal rooms away.'),
+                'refZone-4': _('A *shamrock* is a good-luck charm and gives you special privileges! First, it is “*wild*” and may count as any singleuse tool.'),
+                'refZone-5': _('A tool on a *purple scroll* costs 1 contraband item'),
+                'refZone-6': _('A tool on a *gold scroll* doubles the symbol’s effect.'),
+                'refZone-7': _('A *shamrock* or a tool on a *gold scroll* costs 2 contraband items.'),
+                'refZone-8': _('A *whistle* lets you activate and move one warder 0-3 rooms and then target any prisoner occupying his same room. Warders may move through archways or doors, but not tunnels or windows!'),
+                'refZone-9': _('If your meeple is in a *warder’s quarters*, or in the same room with the *chaplain*, you may transfer a tool or shamrock from your hand to your inventory by paying the cost in contraband items from your inventory.  /Thematically, you are sneakily trading contraband for escape tools or a good-luck charm!/'),
+                'prisZone-0': _('*Step 1: Add 1 Tile to the Prison* || At the beginning of your turn, you _must_ *add a tile* from your hand to the prison |||| *Placement Rules* || First, you _must_ lay a tile with a *Gold Scroll* if possible. |||| Second, you must connect at least one-half of your tile to a matching room type (yard to a yard), and you may never place a tile in a way that connects a *door* to a *window* |||| Third, the Forest must make up the perimeter of the prison, which is exactly six squares from the starting tile, and never closer. No other room type may occupy the sixth square, nor may you add rooms beyond the sixth square. |||| If none of the tiles in your hand can be added to the prison, you must discard one tile to the *Governor’s inventory*'),
+                'prisZone-1': _('*Step 2: Play 2 More Tiles* || *2a. Discard a tile to move your pawn or a warder* || Tile items depicted on the purple and gold scrolls are *tools*. When discarded from your hand, tools allow you to move your pawn (or a warder if playing a whistle) orthogonally from room to room. A tool on a *gold scroll* doubles the symbol’s effect. A *shamrock* is *“wild”* and may count as any single-use tool'),
+                'prisZone-2': _('*Step 2: Play 2 More Tiles* || *2b. Surrender a tile into the Governor’s inventory* || If you have unplayable tiles, or hope to draw better tiles, surrender a tile to the Governor! Simply place it face up to the right of Governor in his inventory. /Tip: While tiles in the Governor’s inventory may be drawn by other players, they can also be drawn by you later/'),
+                'prisZone-3': _('*Step 2: Play 2 More Tiles* || *2c. Add a tile to your inventory* || Tile items depicted on the teal scrolls are *contraband*. If your meeple is in a room matching either of the *room posters* on the roll call tile with the whistle charm, you may transfer the matching contraband item from your hand face up into your inventory at no cost. /Thematically, you are finding contraband in that room!/ |||| If your meeple is in a *warder’s quarters*, or in the same room with the *chaplain*, you may transfer a tool or shamrock from your hand to your inventory by paying the cost in contraband items from your inventory. /Thematically, you are sneakily trading contraband for escape tools or a good-luck charm!/'),
+                'prisZone-4': _('*Step 3: Replenish Your Hand* || Replenish your hand back up to 5 tiles by drawing from the draw stacks. If you wish, _one_ of the tiles drawn _may_ come from the *Governor’s inventory*. '),
+                'prisZone-5': _('Your inventory is to the right of your prisoner tile and can hold up to 3 tiles (4 if you have one or more *shamrocks* in your inventory)'),
+                'cbZone-0': _('Stamps in The Bunks'),
+                'cbZone-1': _('Combs in The Washroom'),
+                'cbZone-2': _('Buttons in The Yard'),
+                'cbZone-3': _('Plum Cake in The Mess Hall'),
+            }, applyMarkup);
 
             // Don't load expansion graphics unless needed
             this.ensureSpecificGameImageLoading([
@@ -371,37 +325,8 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 });
                 this.addTooltipHtmlToClass(`fled_prisoner-tile-zone-${i}`, html, ToolTipDelay);
             }
-
-            this.setupNotifications();
         },
 
-        initPreferencesObserver() {
-            dojo.query('.preference_control').on('change', e => {
-                const match = e.target?.id.match(/^preference_[cf]ontrol_(\d+)$/);
-                if (!match) return;
-                const prefId = match[1];
-                const { value } = e.target;
-                this.prefs[prefId].value = parseInt(value, 10);
-                this.onPreferenceChange(this.prefs[prefId]);
-            });
-        },
-        
-        onPreferenceChange(pref) {
-            // Apply the CSS of the chosen preference value
-            // (Unless it's a default pref, which appears to be
-            // delivered as an array and without CSS class names)
-            if (typeof pref.values === 'object' && typeof pref.values.length === 'number') return;
-            const html = document.getElementsByTagName('html')[0];
-            for (const [ value, settings ] of Object.entries(pref.values)) {
-                if (typeof settings.cssPref !== 'string') continue;
-                if (value == pref.value) {
-                    html.classList.add(settings.cssPref);
-                }
-                else {
-                    html.classList.remove(settings.cssPref);
-                }
-            }
-        },
 
         ///////////////////////////////////////////////////
         //// UI Helpers
@@ -880,12 +805,12 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     await this.animateSmartZoomAsync();
                     if (fled.actionsPlayed < 1) {
                         this.setClientState('client_playFirstAction', {
-                            descriptionmyturn: __('${you} must perform the /first/ of two actions'),
+                            descriptionmyturn: applyMarkup(_('${you} must perform the /first/ of two actions')),
                         });
                     }
                     else {
                         this.setClientState('client_playSecondAction', {
-                            descriptionmyturn: __('${you} must perform the /second/ of two actions'),
+                            descriptionmyturn: applyMarkup(_('${you} must perform the /second/ of two actions')),
                         });
                     }
                     break;
@@ -1233,33 +1158,6 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
         ///////////////////////////////////////////////////
         //// Utility methods
-
-        async invokeServerActionAsync(actionName, args) {
-            try {
-                await new Promise((resolve, reject) => {
-                    try {
-                        if (!this.checkAction(actionName)) {
-                            console.error(`Action '${actionName}' not allowed in ${this.currentState}`, args);
-                            return reject('Invalid');
-                        }
-                        if (!this.amIActive) {
-                            console.error(`Action '${actionName}' not allowed for inactive player`, args);
-                            return reject('Invalid');
-                        }
-                        console.log(`Invoking server action: ${actionName}`, args);
-                        this.ajaxcall(`${BasePath}/${actionName}.html`, { lock: true, ...args }, () => {}, result => {
-                            result?.valid ? resolve() : reject(`${actionName} failed`);
-                        });
-                    }
-                    catch (err) {
-                        reject(err);
-                    }
-                });
-            }
-            finally {
-                console.log('Server action finished');
-            }
-        },
 
         reflow(element = document.documentElement) {
             void(element.offsetHeight);
@@ -3166,7 +3064,6 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                                 name === 'chaplain'
                                     ? _('${you} must select a destination for the chaplain')
                                     : _('${you} must select a destination for the warder')
-    
                         });
                     }                    
                     break;
@@ -3217,7 +3114,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 case ScrollColor.Green:
                     this.clientStateArgs.selectionsNeeded = 2;
                     this.setClientState('client_selectInventoryTiles', {
-                        descriptionmyturn: __('${you} must select /two/ inventory tiles to pay the cost'),
+                        descriptionmyturn: applyMarkup(_('${you} must select /two/ inventory tiles to pay the cost')),
                     });
                     break;
             }
@@ -3378,7 +3275,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
         async onClickConfirmDiscard() {
             console.log('onClickConfirmDiscard()');
             const t = this.clientStateArgs.selectedTileId;
-            await this.invokeServerActionAsync('discard', { t });
+            await invokeServerActionAsync('discard', fled.moveNumber, { t });
             // TODO: lock the UI while the above call is happening
         },
 
@@ -3408,7 +3305,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 this.destroyAllSlots();
                 this.makeTilesNonSelectable();
 
-                await this.invokeServerActionAsync('placeTile', { t, x, y, o });
+                await invokeServerActionAsync('placeTile', fled.moveNumber, { t, x, y, o });
 
                 const tileDiv = this.getTileDiv(t);
                 tileDiv?.classList.remove('fled_tentative');
@@ -3473,8 +3370,11 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 y = headPos.y;
             }
 
-            await this.invokeServerActionAsync('move', { t, x, y });
+            await invokeServerActionAsync('move', fled.moveNumber, { t, x, y });
             // TODO: lock the UI while the above call is happening
+
+            delete this.clientStateArgs.selectedTileId;
+            delete this.clientStateArgs.selectedCoords;
         },
 
         async onClickConfirmNpcMovement() {
@@ -3547,7 +3447,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             } =  this.clientStateArgs;
 
             const d = selectedInventoryTileIds?.map(tileId => `${tileId}`).join() || undefined;
-            await this.invokeServerActionAsync('add', { t, d });
+            await invokeServerActionAsync('add', fled.moveNumber, { t, d });
             // TODO: lock the UI while the above call is happening
         },
 
@@ -3582,8 +3482,10 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
             this.makeTilesNonSelectable();
 
-            await this.invokeServerActionAsync('surrender', { t });
+            await invokeServerActionAsync('surrender', fled.moveNumber, { t });
             // TODO: lock the UI while the above call is happening
+
+            delete this.clientStateArgs.selectedTileId;
         },
 
         async onClickCancelSurrender() {
@@ -3635,7 +3537,9 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
             // Format discards into a comma-separated list
             const d = this.clientStateArgs.selectedInventoryTileIds?.map(tileId => `${tileId}`).join() || undefined;
-            await this.invokeServerActionAsync('escape', { d });
+            await invokeServerActionAsync('escape', fled.moveNumber, { d });
+
+            delete this.clientStateArgs.selectedInventoryTileIds;
         },
 
         async onClickTake1Draw2() {
@@ -3655,7 +3559,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
             this.makeTilesNonSelectable();
 
-            await this.invokeServerActionAsync('drawTiles', { t: 0 });
+            await invokeServerActionAsync('drawTiles', fled.moveNumber, { t: 0 });
         },
 
         async onClickCancelTakeFromGovernor() {
@@ -3679,15 +3583,16 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
             this.makeTilesNonSelectable();
 
-            await this.invokeServerActionAsync('drawTiles', { t });
+            await invokeServerActionAsync('drawTiles', fled.moveNumber, { t });
             // TODO: lock the UI while the above call is happening
+
+            delete this.clientStateArgs.selectedTileId;
         },
 
         onFirstActionDone() {
-            if (!this.amIActive) return;
             if (fled.actionsPlayed !== 1) return;
             this.setClientState('client_playSecondAction', {
-                descriptionmyturn: __('${you} must perform the /second/ of two actions'),
+                descriptionmyturn: applyMarkup(_('${you} must perform the /second/ of two actions')),
             });
         },
 
@@ -3720,26 +3625,6 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
         ///////////////////////////////////////////////////
         //// Reaction to cometD notifications
-
-        setupNotifications() {
-            console.log('notifications subscriptions setup');
-            const eventNames = Object.getOwnPropertyNames(this.__proto__).reduce((all, name) => {
-                const match = /^notify_(.+?)$/.exec(name);
-                match && all.push(match[1]);
-                return all;
-            }, []);
-            for (const eventName of eventNames) {
-                dojo.subscribe(eventName, this, async data => {
-                    const fnName = `notify_${eventName}`;
-                    console.log(`Entering ${fnName}`, data.args);
-                    await this[fnName].call(this, data.args);
-                    console.log(`Exiting ${fnName}`);
-                    this.notifqueue.setSynchronousDuration(0);
-                });
-                this.notifqueue.setSynchronous(eventName);
-            }
-            console.log(`Registered ${eventNames.length} event handlers`);
-        },
 
         async notify_tileDiscarded({ playerId, tile: tileId, gov }) {
             // Note: tileId is only sent when this player discards a tile

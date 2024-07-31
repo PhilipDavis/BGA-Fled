@@ -2419,6 +2419,10 @@ six tiles... TODO
         get governorInventory() {
             return this.data.governorInventory;
         }
+
+        get moveNumber() {
+            return this.data.move;
+        }
     }
 
     function unique(array) {
