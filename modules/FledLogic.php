@@ -47,6 +47,8 @@ define('FLED_SHAMROCK', 30);
 
 define('FLED_WHISTLE', 40);
 
+define('FLED_BONE', 50);
+
 
 define('FLED_TILE_YELLOW_BUNK', 1);
 define('FLED_TILE_BLUE_BUNK', 2);
@@ -72,6 +74,14 @@ define('FLED_DIRECTION_WEST', 3);
 define('FLED_WIDTH', 14);
 define('FLED_HEIGHT', 13);
 
+define('FLED_OPT_HOUND', 100);
+define('FLED_OPT_HOUND_NO', 1);
+define('FLED_OPT_HOUND_YES', 2);
+
+define('FLED_OPT_SPECTER', 101);
+define('FLED_OPT_SPECTER_NO', 1);
+define('FLED_OPT_SPECTER_YES', 2);
+
 
 class FledLogic
 {
@@ -80,25 +90,37 @@ class FledLogic
 
     // Note: All bunk, yard, and courtyard tiles have a tunnel
 
+    public static $ContrabandFromRoom = [
+        FLED_ROOM_MESSHALL => FLED_CONTRABAND_CAKE,
+        FLED_ROOM_WASHROOM => FLED_CONTRABAND_COMB,
+        FLED_ROOM_YARD => FLED_CONTRABAND_BUTTON,
+        FLED_ROOM_BUNK => FLED_CONTRABAND_STAMP,
+
+        FLED_ROOM_CORRIDOR => FLED_EMPTY,
+        FLED_ROOM_QUARTERS => FLED_EMPTY,
+        FLED_ROOM_COURTYARD => FLED_EMPTY,
+        FLED_ROOM_FOREST => FLED_EMPTY,
+    ];
+
     public static $RollCallTiles = [
         0 => [
-            FLED_ROOM_MESSHALL => FLED_CONTRABAND_CAKE,
-            FLED_ROOM_YARD => FLED_CONTRABAND_BUTTON,
+            FLED_ROOM_MESSHALL,
+            FLED_ROOM_YARD,
         ],
         1 => [
-            FLED_ROOM_WASHROOM => FLED_CONTRABAND_COMB,
-            FLED_ROOM_MESSHALL => FLED_CONTRABAND_CAKE,
+            FLED_ROOM_WASHROOM,
+            FLED_ROOM_MESSHALL,
         ],
         2 => [
-            FLED_ROOM_WASHROOM => FLED_CONTRABAND_COMB,
-            FLED_ROOM_BUNK => FLED_CONTRABAND_STAMP,
+            FLED_ROOM_WASHROOM,
+            FLED_ROOM_BUNK,
         ],
         3 => [
-            FLED_ROOM_BUNK => FLED_CONTRABAND_STAMP,
-            FLED_ROOM_YARD => FLED_CONTRABAND_BUTTON,
+            FLED_ROOM_BUNK,
+            FLED_ROOM_YARD,
         ],
         4 => [ // The Governor tile
-            FLED_ROOM_BUNK => FLED_CONTRABAND_STAMP,
+            FLED_ROOM_BUNK,
         ],
     ];
 
@@ -1049,7 +1071,122 @@ class FledLogic
             ],
             'minPlayers' => 3,
         ],
+        // Hound Expansion
+        80 => [
+            'color' => FLED_COLOR_GREEN,
+            'contains' => FLED_SHAMROCK,
+            'rooms' => [
+                [
+                    'type' => FLED_ROOM_CORRIDOR,
+                    'egress' => [ FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY, FLED_EGRESS_OPEN, FLED_EGRESS_ARCHWAY ],
+                ],
+                [
+                    'type' => FLED_ROOM_CORRIDOR,
+                    'egress' => [ FLED_EGRESS_OPEN, FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY ],
+                ],
+            ],
+            'minPlayers' => 1,
+            'expansion' => FLED_OPT_HOUND,
+        ],
+        81 => [
+            'color' => FLED_COLOR_GREEN,
+            'contains' => FLED_SHAMROCK,
+            'rooms' => [
+                [
+                    'type' => FLED_ROOM_YARD,
+                    'egress' => [ FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY, FLED_EGRESS_OPEN, FLED_EGRESS_ARCHWAY ],
+                ],
+                [
+                    'type' => FLED_ROOM_YARD,
+                    'egress' => [ FLED_EGRESS_OPEN, FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY ],
+                ],
+            ],
+            'minPlayers' => 1,
+            'expansion' => FLED_OPT_HOUND,
+        ],
+        82 => [
+            'color' => FLED_COLOR_GREEN,
+            'contains' => FLED_SHAMROCK,
+            'rooms' => [
+                [
+                    'type' => FLED_ROOM_COURTYARD,
+                    'egress' => [ FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY, FLED_EGRESS_OPEN, FLED_EGRESS_ARCHWAY ],
+                ],
+                [
+                    'type' => FLED_ROOM_COURTYARD,
+                    'egress' => [ FLED_EGRESS_OPEN, FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY ],
+                ],
+            ],
+            'minPlayers' => 1,
+            'expansion' => FLED_OPT_HOUND,
+        ],
+        83 => [
+            'color' => FLED_COLOR_PURPLE,
+            'contains' => FLED_BONE,
+            'rooms' => [
+                [
+                    'type' => FLED_ROOM_BUNK,
+                    'egress' => [ FLED_EGRESS_WINDOW, FLED_EGRESS_WINDOW, FLED_EGRESS_DOOR, FLED_EGRESS_WINDOW ],
+                ],
+                [
+                    'type' => FLED_ROOM_CORRIDOR,
+                    'egress' => [ FLED_EGRESS_DOOR, FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY ],
+                ],
+            ],
+            'minPlayers' => 1,
+            'expansion' => FLED_OPT_HOUND,
+        ],
+        84 => [
+            'color' => FLED_COLOR_PURPLE,
+            'contains' => FLED_BONE,
+            'rooms' => [
+                [
+                    'type' => FLED_ROOM_YARD,
+                    'egress' => [ FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY, FLED_EGRESS_OPEN, FLED_EGRESS_WINDOW ],
+                ],
+                [
+                    'type' => FLED_ROOM_YARD,
+                    'egress' => [ FLED_EGRESS_OPEN, FLED_EGRESS_DOOR, FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY ],
+                ],
+            ],
+            'minPlayers' => 1,
+            'expansion' => FLED_OPT_HOUND,
+        ],
+        85 => [
+            'color' => FLED_COLOR_PURPLE,
+            'contains' => FLED_BONE,
+            'rooms' => [
+                [
+                    'type' => FLED_ROOM_COURTYARD,
+                    'egress' => [ FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY, FLED_EGRESS_OPEN, FLED_EGRESS_WINDOW ],
+                ],
+                [
+                    'type' => FLED_ROOM_COURTYARD,
+                    'egress' => [ FLED_EGRESS_OPEN, FLED_EGRESS_DOOR, FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY ],
+                ],
+            ],
+            'minPlayers' => 1,
+            'expansion' => FLED_OPT_HOUND,
+        ],
+        // Specter Expansion
+        90 => [
+            'color' => FLED_COLOR_GOLD,
+            'contains' => FLED_TOOL_KEY,
+            'rooms' => [
+                [
+                    'type' => FLED_ROOM_CORRIDOR,
+                    'egress' => [ FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY, FLED_EGRESS_OPEN, FLED_EGRESS_ARCHWAY ],
+                ],
+                [
+                    'type' => FLED_ROOM_CORRIDOR,
+                    'egress' => [ FLED_EGRESS_OPEN, FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY ],
+                ],
+            ],
+            'minPlayers' => 1,
+            'expansion' => FLED_OPT_SPECTER,
+        ],
     ];
+
 
 /*
 // Specter Expansion
@@ -1088,6 +1225,12 @@ six tiles... TODO
     //
     static function newGame($playerColors, $options, FledEvents $events)
     {
+        $optionKeys = [ 'houndExpansion', 'specterExpansion' ];
+        $options = (array)$options;
+        foreach ($optionKeys as $key)
+            if (!array_key_exists($key, $options))
+                $options[$key] = false;
+
         $playerIds = array_keys($playerColors);
         $playerCount = count($playerColors);
 
@@ -1101,8 +1244,23 @@ six tiles... TODO
 
         // Set the initial draw pile to be the set of tiles except the starter tiles
         // and also remove tiles that are incompatible with the current player count.
+        // Also also remove tiles that are for expansions that are not in play.
         $drawPile = array_diff(array_keys(FledLogic::$FledTiles), $starterTileIds);
         $drawPile = array_filter($drawPile, fn($tileId) => FledLogic::$FledTiles[$tileId]['minPlayers'] <= $playerCount);
+        if (!$options['houndExpansion'])
+        {
+            $drawPile = array_filter($drawPile, fn($tileId) =>
+                !isset(FledLogic::$FledTiles[$tileId]['expansion']) ||
+                FledLogic::$FledTiles[$tileId]['expansion'] != FLED_OPT_HOUND
+            );
+        }
+        if (!$options['specterExpansion'])
+        {
+            $drawPile = array_filter($drawPile, fn($tileId) =>
+                !isset(FledLogic::$FledTiles[$tileId]['expansion']) ||
+                FledLogic::$FledTiles[$tileId]['expansion'] != FLED_OPT_SPECTER
+            );
+        }
         shuffle($drawPile);
 
         // Create an empty board
@@ -1140,24 +1298,30 @@ six tiles... TODO
             ];
         }
 
+        $npcs = (object)[
+            'warder1' => [
+                'pos' => [ 6, 6 ],
+            ],
+            /* These get added as the game progresses
+            'warder2' => null,
+            'warder3' => null,
+            'chaplain' => null,
+            'ghost' => null, // Specter Expansion
+            */
+        ];
+
+        if ($options['houndExpansion'])
+            $npcs->hound = [
+                'pos' => [ 6, 6 ],
+            ];
+
         return new FledLogic((object)[
             'version' => 1, // Only need to increment for breaking changes after beta release
-            'options' => (array)$options,
+            'options' => $options,
             'nextPlayer' => 0,
             'order' => $playerIds,
             'players' => $players,
-            'npcs' => [
-                'warder1' => [
-                    'pos' => [ 6, 6 ],
-                ],
-                /* These get added as the game progressese
-                'warder2' => null,
-                'warder3' => null,
-                'chaplain' => null,
-                'ghost' => null, // Specter Expansion
-                'hound' => null, // Hound Expansion
-                */
-            ],
+            'npcs' => $npcs,
             'governorInventory' => [],
             'whistlePos' => 4, // 0-based index; 4 is the last position (Governor Tile)
             'rollCall' => $rollCall,
@@ -1168,7 +1332,7 @@ six tiles... TODO
             'hardLabor' => 0, // Set to 1 once Hard Labor is called
             'finalTurns' => null, // Once a player has escaped, this counts down to how many turns are left; game over at 0
             'setup' => 0, // Switches to 1 once everyone has played their starter bunks
-            'moves' => 0,
+            'move' => 1,
         ], $events);
     }
 
@@ -1202,6 +1366,11 @@ six tiles... TODO
         return FledLogic::$FledTiles[$tileId % 100]['color'];
     }
 
+    public static function isWarder($npcName)
+    {
+        return $npcName === 'chaplain' || strstr($npcName, 'warder') !== false;
+    }
+
     public static function roomHasTunnel($room)
     {
         if (!$room) return false;
@@ -1221,6 +1390,12 @@ six tiles... TODO
             case FLED_TILE_DOUBLE_CORRIDOR:
             case FLED_TILE_START:
             case FLED_TILE_DOUBLE_MESSHALL:
+            case 80: // Five of the six Hound expansion tiles
+            case 81:
+            case 82:
+            case 84:
+            case 85:
+            case 90: // Specter expansion
                 return true;
             default:
                 return false;
@@ -1431,7 +1606,7 @@ six tiles... TODO
         // but we're just using this flag to indicate that
         // the addTile phase has been completed.
         $this->data->players->$playerId->addedTile = true;
-        $this->data->moves++;
+        $this->data->move++;
     }
 
     public function placeTile($tileId, $x, $y, $orientation)
@@ -1483,7 +1658,7 @@ six tiles... TODO
         }
 
         // Otherwise, increase the move counter because this was a real move
-        $this->data->moves++;
+        $this->data->move++;
 
         $this->data->players->$playerId->placedTile = true;
         $this->eventHandlers->onTilePlaced($playerId, $tileId, $x, $y, $orientation);
@@ -1557,7 +1732,7 @@ six tiles... TODO
         $this->data->players->$playerId->pos = [ $x, $y ];
 
         $this->data->players->$playerId->actionsPlayed = ++$actionsPlayed;
-        $this->data->moves++;
+        $this->data->move++;
 
         $this->eventHandlers->onTilePlayedToMove($playerId, $tileId, $x, $y, $tool, $path);
         $this->eventHandlers->onActionComplete($actionsPlayed);
@@ -1628,7 +1803,7 @@ six tiles... TODO
     public function getSafeRollCallRooms()
     {
         $rollCallTileIndex = $this->data->rollCall[$this->data->whistlePos];
-        return array_keys(FledLogic::$RollCallTiles[$rollCallTileIndex]);
+        return FledLogic::$RollCallTiles[$rollCallTileIndex];
     }
 
     public function getPlayerIdByColorName($colorName)
@@ -1642,7 +1817,7 @@ six tiles... TODO
         return null;
     }
 
-    public function discardTileToMoveWarder($tileId, $x, $y, $npcName, $targetPlayerColor)
+    public function discardTileToMoveNpc($tileId, $x, $y, $npcName, $targetPlayerColor)
     {
         $targetPlayerId = $targetPlayerColor ? $this->getPlayerIdByColorName($targetPlayerColor) : null;
 
@@ -1683,6 +1858,12 @@ six tiles... TODO
         if ($actionsPlayed >= 2)
             throw new Exception('Too many actions');
 
+        if ($npcName === 'hound' && !$this->getOption('houndExpansion'))
+            throw new Exception('Cannot move hound unless playing expansion');
+
+        if ($npcName === 'ghost' && !$this->getOption('specterExpansion'))
+            throw new Exception('Cannot move ghost unless playing expansion');
+
         // Remove the card from the player's hand
         // and put it in the discard pile
         $this->removeTileFromHand($tileId, $playerId);
@@ -1690,13 +1871,12 @@ six tiles... TODO
 
         // TODO: validate that the move is legal! For now we just assume it's legal
 
-        // TODO: calculate the actual path through each cell
         $path = [
             $this->data->npcs->$npcName->pos,
             [ $x, $y ],
         ];
 
-        // Move the warder / chaplain
+        // Move the NPC
         $this->data->npcs->$npcName->pos = [ $x, $y ];
 
         if ($targetPlayer)
@@ -1748,12 +1928,13 @@ six tiles... TODO
 
         // Move whistle left by one spot (there are five spots)
         // Also, note that the whistle moves *after* the warder move is resolved
-        $this->data->whistlePos = ($this->data->whistlePos + 4) % 5;
+        if (FledLogic::isWarder($npcName))
+            $this->data->whistlePos = ($this->data->whistlePos + 4) % 5;
 
         $this->data->players->$playerId->actionsPlayed = ++$actionsPlayed;
-        $this->data->moves++;
+        $this->data->move++;
 
-        $this->eventHandlers->onTilePlayedToMoveWarder($playerId, $targetPlayerId, $tileId, $x, $y, $npcName, $path);
+        $this->eventHandlers->onTilePlayedToMoveNpc($playerId, $targetPlayerId, $tileId, $x, $y, $npcName, $path);
 
         if ($toBunk)
             $this->eventHandlers->onPlayerSentToBunk($targetPlayerId);
@@ -1773,7 +1954,9 @@ six tiles... TODO
             $this->eventHandlers->onPlayerIsSafe($targetPlayerId, $roomType);
         }
 
-        $this->eventHandlers->onWhistleMoved($playerId, $this->getSafeRollCallRooms());
+        if (FledLogic::isWarder($npcName))
+            $this->eventHandlers->onWhistleMoved($playerId, $this->getSafeRollCallRooms());
+
         $this->eventHandlers->onActionComplete($actionsPlayed);
     }
 
@@ -1826,7 +2009,7 @@ six tiles... TODO
         $this->data->players->$playerId->inventory[] = $tileId;
 
         $this->data->players->$playerId->actionsPlayed = ++$actionsPlayed;
-        $this->data->moves++;
+        $this->data->move++;
 
         $score = $this->getPlayerScore($playerId);
         $auxScore = $this->getPlayerAuxScore($playerId);
@@ -1855,7 +2038,7 @@ six tiles... TODO
         $this->data->governorInventory[] = $tileId;
 
         $this->data->players->$playerId->actionsPlayed = ++$actionsPlayed;
-        $this->data->moves++;
+        $this->data->move++;
 
         $this->eventHandlers->onTileSurrendered($playerId, $tileId);
         $this->eventHandlers->onActionComplete($actionsPlayed);
@@ -1918,7 +2101,7 @@ six tiles... TODO
                 $drawnBeforeShuffle[] = $tileId;
         }
         
-        $this->data->moves++;
+        $this->data->move++;
 
         $drawPileCount = count($this->data->drawPile);
         $this->eventHandlers->onTilesDrawn($playerId, $drawnBeforeShuffle, $drawnAfterShuffle, $drawPileCount);
@@ -2149,7 +2332,7 @@ six tiles... TODO
         {
             $tile = FledLogic::$FledTiles[$tileId];
             $item = $tile['contains'];
-            if ($item === FLED_WHISTLE || $item === FLED_SHAMROCK)
+            if ($item === FLED_WHISTLE || $item === FLED_SHAMROCK || $item === FLED_BONE)
                 $eligibleTileIds[] = $tileId;
             else if (array_search($item, $toolsNeeded) !== false && !$player->inSolitary)
             {
@@ -2353,7 +2536,7 @@ six tiles... TODO
             $effectiveItem = FLED_TOOL_KEY;
             return 1;
         }
-        else if ($needBoot && ($item === FLED_TOOL_BOOT || $item === FLED_SHAMROCK || $item === FLED_WHISTLE))
+        else if ($needBoot && ($item === FLED_TOOL_BOOT || $item === FLED_SHAMROCK || $item === FLED_WHISTLE || $item === FLED_BONE))
         {
             $effectiveItem = FLED_TOOL_BOOT;
             return 1;
@@ -2463,10 +2646,12 @@ six tiles... TODO
 
         // If meeple is in a room that matches rooms shown on the current whistle
         // roll call tile then the player may add the associated contraband.
+        // Also, in the Hound expansion, player may add contraband matching
+        // the room where the hound currently resides.
         $currentRoomType = $this->getRoomTypeAt($player->pos[0], $player->pos[1]);
         $rollCallTileId = $this->data->rollCall[$this->data->whistlePos];
-        $rollCallTile = FledLogic::$RollCallTiles[$rollCallTileId];
-        if (array_key_exists($currentRoomType, $rollCallTile))
+        $validRooms = FledLogic::$RollCallTiles[$rollCallTileId];
+        if (array_search($currentRoomType, $validRooms) !== false || $this->getOption('houndExpansion'))
         {
             // Four is the absolute max capacity; three is the max
             // if there is no shamrock in the player's inventory.
@@ -2474,10 +2659,21 @@ six tiles... TODO
             $inventoryCount = count($player->inventory);
             if ($inventoryCount < 3 || ($inventoryCount < 4 && $hasShamrock))
             {
-                $contraband = $rollCallTile[$currentRoomType];
+                $contraband = FledLogic::$ContrabandFromRoom[$currentRoomType];
                 foreach ($player->hand as $tileId)
-                    if (FledLogic::$FledTiles[$tileId]['contains'] == $contraband)
+                {
+                    if (FledLogic::$FledTiles[$tileId]['contains'] == $contraband && $contraband !== FLED_EMPTY)
                         $eligibleTileIds[] = $tileId;
+
+                    else if ($this->getOption('houndExpansion'))
+                    {
+                        $houndPos = $this->data->npcs->hound->pos;
+                        $houndRoomType = $this->getRoomTypeAt($houndPos[0], $houndPos[1]);
+                        $houndContraband = FledLogic::$ContrabandFromRoom[$houndRoomType];
+                        if (FledLogic::$FledTiles[$tileId]['contains'] == $houndContraband)
+                            $eligibleTileIds[] = $tileId;
+                    }
+                }
             }
         }
 
@@ -2756,7 +2952,7 @@ six tiles... TODO
 
     public function getMoveCount()
     {
-        return $this->data->moves;
+        return $this->data->move;
     }
 
     // Return only the public data and the data private to the given player 

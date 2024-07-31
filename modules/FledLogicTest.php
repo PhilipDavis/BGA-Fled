@@ -307,7 +307,7 @@ final class FledLogicTest extends TestCase
 
         $this->assertFalse($fled->isSafeForRollCall($x, $y), 'Target room should not be considered safe');
 
-        $mockEvents->expects($this->once())->method('onTilePlayedToMoveWarder')
+        $mockEvents->expects($this->once())->method('onTilePlayedToMoveNpc')
             ->with($playerId, $targetPlayerId, $tileId, $x, $y, 'warder1', [ [8,6], [8,5] ]);
 
         $mockEvents->expects($this->once())->method('onPlayerSentToSolitary')
@@ -318,7 +318,7 @@ final class FledLogicTest extends TestCase
         $mockEvents->expects($this->never())->method('onPlayerUnshackled');
 
 
-        $fled->discardTileToMoveWarder($tileId, $x, $y, 'warder1', $p);
+        $fled->discardTileToMoveNpc($tileId, $x, $y, 'warder1', $p);
 
         $this->assertTrue(true);
     }

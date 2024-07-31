@@ -65,6 +65,7 @@ define([], () => {
         ...ToolType,
         Shamrock: 30,
         Whistle: 40,
+        Bone: 50,
     };
 
     const SpecialTile = {
@@ -97,26 +98,19 @@ define([], () => {
     const FledWidth = 14;
     const FledHeight = 13;
 
+    const ContrabandFromRoom = {
+        [RoomType.MessHall]: ContrabandType.Cake,
+        [RoomType.Washroom]: ContrabandType.Comb,
+        [RoomType.Bunk]: ContrabandType.Stamp,
+        [RoomType.Yard]: ContrabandType.Button,
+    };
+
     const RollCallTiles = [
-        {
-            [RoomType.MessHall]: ContrabandType.Cake,
-            [RoomType.Yard]: ContrabandType.Button,
-        },
-        {
-            [RoomType.Washroom]: ContrabandType.Comb,
-            [RoomType.MessHall]: ContrabandType.Cake,
-        },
-        {
-            [RoomType.Washroom]: ContrabandType.Comb,
-            [RoomType.Bunk]: ContrabandType.Stamp,
-        },
-        {
-            [RoomType.Bunk]: ContrabandType.Stamp,
-            [RoomType.Yard]: ContrabandType.Button,
-        },
-        { // The Governor tile
-            [RoomType.Bunk]: ContrabandType.Stamp,
-        },
+        [ RoomType.MessHall, RoomType.Yard ],
+        [ RoomType.Washroom, RoomType.MessHall],
+        [ RoomType.Washroom, RoomType.Bunk ],
+        [ RoomType.Bunk, RoomType.Yard ],
+        [ RoomType.Bunk ], // The Governor tile
     ];
 
     // Note: All bunk, yard, and courtyard tiles have a tunnel
@@ -1061,6 +1055,113 @@ define([], () => {
             ],
             minPlayers: 3,
         },
+        // Hound Expansion
+        80: {
+            color: ScrollColor.Green,
+            contains: ItemType.Shamrock,
+            rooms: [
+                {
+                    type: RoomType.Corridor,
+                    egress: [ EgressType.Archway, EgressType.Archway, EgressType.Open, EgressType.Archway ],
+                },
+                {
+                    type: RoomType.Corridor,
+                    egress: [ EgressType.Open, EgressType.Archway, EgressType.Archway, EgressType.Archway ],
+                },
+            ],
+            minPlayers: 1,
+        },
+        81: {
+            color: ScrollColor.Green,
+            contains: ItemType.Shamrock,
+            rooms: [
+                {
+                    type: RoomType.Yard,
+                    egress: [ EgressType.Archway, EgressType.Archway, EgressType.Open, EgressType.Archway ],
+                },
+                {
+                    type: RoomType.Yard,
+                    egress: [ EgressType.Open, EgressType.Archway, EgressType.Archway, EgressType.Archway ],
+                },
+            ],
+            minPlayers: 1,
+        },
+        82: {
+            color: ScrollColor.Green,
+            contains: ItemType.Shamrock,
+            rooms: [
+                {
+                    type: RoomType.Courtyard,
+                    egress: [ EgressType.Archway, EgressType.Archway, EgressType.Open, EgressType.Archway ],
+                },
+                {
+                    type: RoomType.Courtyard,
+                    egress: [ EgressType.Open, EgressType.Archway, EgressType.Archway, EgressType.Archway ],
+                },
+            ],
+            minPlayers: 1,
+        },
+        83: {
+            color: ScrollColor.Purple,
+            contains: ItemType.Bone,
+            rooms: [
+                {
+                    type: RoomType.Bunk,
+                    egress: [ EgressType.Window, EgressType.Window, EgressType.Door, EgressType.Window ],
+                },
+                {
+                    type: RoomType.Corridor,
+                    egress: [ EgressType.Door, EgressType.Archway, EgressType.Archway, EgressType.Archway ],
+                },
+            ],
+            minPlayers: 1,
+        },
+        84: {
+            color: ScrollColor.Purple,
+            contains: ItemType.Bone,
+            rooms: [
+                {
+                    type: RoomType.Yard,
+                    egress: [ EgressType.Archway, EgressType.Archway, EgressType.Open, EgressType.Window ],
+                },
+                {
+                    type: RoomType.Yard,
+                    egress: [ EgressType.Open, EgressType.Door, EgressType.Archway, EgressType.Archway ],
+                },
+            ],
+            minPlayers: 1,
+        },
+        85: {
+            color: ScrollColor.Purple,
+            contains: ItemType.Bone,
+            rooms: [
+                {
+                    type: RoomType.Courtyard,
+                    egress: [ EgressType.Archway, EgressType.Archway, EgressType.Open, EgressType.Window ],
+                },
+                {
+                    type: RoomType.Courtyard,
+                    egress: [ EgressType.Open, EgressType.Door, EgressType.Archway, EgressType.Archway ],
+                },
+            ],
+            minPlayers: 1,
+        },
+        // Specter Expansion
+        90: {
+            color: ScrollColor.Gold,
+            contains: ToolType.Key,
+            rooms: [
+                {
+                    type: RoomType.Corridor,
+                    egress: [ EgressType.Archway, EgressType.Archway, EgressType.Open, EgressType.Archway ],
+                },
+                {
+                    type: RoomType.Corridor,
+                    egress: [ EgressType.Open, EgressType.Archway, EgressType.Archway, EgressType.Archway ],
+                },
+            ],
+            minPlayers: 1,
+        },
     };
 
 /*
@@ -1156,7 +1257,15 @@ six tiles... TODO
             case SpecialTile.DoubleYard: return true;
             case SpecialTile.DoubleMessHall: return true;
             case SpecialTile.DoubleCorridor: return true;
-            default: return false;
+            case 80: // Five of the six Hound expansion tiles
+            case 81:
+            case 82:
+            case 84:
+            case 85:
+            case 90: // Specter tile
+                return true;
+            default:
+                return false;
         }
     }
 
@@ -1168,6 +1277,11 @@ six tiles... TODO
     function isShamrockTile(tileId) {
         const { contains } = Tiles[tileId];
         return contains === ItemType.Shamrock;
+    }
+
+    function isBoneTile(tileId) {
+        const { contains } = Tiles[tileId];
+        return contains === ItemType.Bone;
     }
 
     class FledLogic {
@@ -1600,7 +1714,7 @@ six tiles... TODO
             for (const tileId of player.hand) {
                 const tile = Tiles[tileId];
                 const item = tile.contains;
-                if (item === ItemType.Whistle || item === ItemType.Shamrock) {
+                if (item === ItemType.Whistle || item === ItemType.Shamrock || item === ItemType.Bone) {
                     eligibleTileIds.push(tileId);
                 }
                 else if (toolsNeeded.indexOf(item) >= 0 && !player.inSolitary) {
@@ -1792,7 +1906,7 @@ six tiles... TODO
             if (needKey && (item === ItemType.Key || item === ItemType.Shamrock || item === ItemType.Whistle)) {
                 return 1;
             }
-            else if (needBoot && (item === ItemType.Boot || item === ItemType.Shamrock || item === ItemType.Whistle)) {
+            else if (needBoot && (item === ItemType.Boot || item === ItemType.Shamrock || item === ItemType.Whistle || item === ItemType.Bone)) {
                 return 1;
             }
             else if (needFile && (item === ItemType.File || item === ItemType.Shamrock)) {
@@ -1880,19 +1994,32 @@ six tiles... TODO
 
             // If meeple is in a room that matches rooms shown on the current whistle
             // roll call tile then the player may add the associated contraband.
+            // Also, in the Hound expansion, player may add contraband matching
+            // the room where the hound currently resides.
             const currentRoomType = this.getRoomAt(player.pos[0], player.pos[1]).type;
             const rollCallTileId = this.data.rollCall[this.data.whistlePos];
-            const rollCallTile = RollCallTiles[rollCallTileId];
-            if (rollCallTile[currentRoomType] !== undefined) {
+            const validRooms = RollCallTiles[rollCallTileId];
+            if (validRooms.indexOf(currentRoomType) >= 0 || this.data.options.houndExpansion) {
                 // Four is the absolute max capacity; three is the max
                 // if there is no shamrock in the player's inventory.
                 // No contraband can be added if we're at capacity.
                 const inventoryCount = player.inventory.length;
                 if (inventoryCount < 3 || (inventoryCount < 4 && hasShamrock)) {
-                    const contraband = rollCallTile[currentRoomType];
+                    const contraband = ContrabandFromRoom[currentRoomType];
                     for (const tileId of player.hand) {
-                        if (Tiles[tileId].contains == contraband)
-                            eligibleTileIds.push(tileId);
+                        if (validRooms.indexOf(currentRoomType) >= 0) {
+                            if (Tiles[tileId].contains == contraband && contraband != Empty) {
+                                eligibleTileIds.push(tileId);
+                            }
+                        }
+                        else if (this.data.options.houndExpansion)
+                        {
+                            const [ x, y ] = this.data.npcs.hound.pos;
+                            const houndContraband = ContrabandFromRoom[this.getRoomAt(x, y).type];
+                            if (Tiles[tileId].contains == houndContraband) {
+                                eligibleTileIds.push(tileId);
+                            }
+                        }
                     }
                 }
             }
@@ -2030,7 +2157,17 @@ six tiles... TODO
             return this.traverseAboveGround(ItemType.Whistle, x, y, 0, 3);
         }
 
-        moveWarder(playerId, tileId, npcName, x, y) {
+        getLegalHoundMoves() {
+            const { hound } = this.data.npcs
+            if (!hound) return [];
+            const [ x, y ] = hound.pos;
+            return [
+                ...this.traverseAboveGround(ItemType.Bone, x, y, 0, 3),
+                ...this.traverseUnderGround(x, y, FledWidth + FledHeight),
+            ];
+        }
+
+        moveNpc(playerId, tileId, npcName, x, y) {
             this.discardTile(playerId, tileId);
             if (playerId == this.myPlayerId) {
                 this.data.players[playerId].actionsPlayed++;
@@ -2201,6 +2338,7 @@ six tiles... TODO
             if (this.data.finalTurns !== null) {
                 this.data.finalTurns--;
             }
+            this.data.move++;
         }
 
         toJson() {
@@ -2307,6 +2445,7 @@ six tiles... TODO
         isDoubleTile,
         isWhistleTile,
         isShamrockTile,
+        isBoneTile,
         unpackCell,
         RollCallTiles,
         Tiles,

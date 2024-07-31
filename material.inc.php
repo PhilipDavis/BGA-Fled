@@ -58,6 +58,9 @@ $this->Items = [
     FLED_WHISTLE => [
         'one' => clienttranslate('a Whistle'),
     ],
+    FLED_BONE => [
+        'one' => clienttranslate('a Bone'),
+    ],
 ];
 
 $this->RoomTypeLabels = [

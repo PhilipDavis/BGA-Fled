@@ -14,117 +14,118 @@ class action_fled extends APP_GameAction
     // Constructor: please do not modify
    	public function __default()
   	{
-  	    if (self::isArg('notifwindow'))
+  	    if ($this->isArg('notifwindow'))
   	    {
             $this->view = 'common_notifwindow';
-  	        $this->viewArgs['table'] = self::getArg('table', AT_posint, true);
+  	        $this->viewArgs['table'] = $this->getArg('table', AT_posint, true);
   	    }
   	    else
   	    {
             $this->view = 'fled_fled';
-            self::trace('Complete reinitialization of board game');
+            $this->trace('Complete reinitialization of board game');
         }
   	}
   	
     public function debugSetState()
     {
-        self::setAjaxMode();
+        $this->setAjaxMode();
         
-        $json = base64_decode(self::getArg('s', AT_base64, true));
+        $json = base64_decode($this->getArg('s', AT_base64, true));
         $this->game->action_debugSetState($json);
 
-        self::ajaxResponse();
+        $this->ajaxResponse();
     }
   	
     public function placeTile()
     {
-        self::setAjaxMode();
+        $this->setAjaxMode();
         
-        $tileId = intval(self::getArg('t', AT_posint, true));
-        $x = intval(self::getArg('x', AT_posint, true));
-        $y = intval(self::getArg('y', AT_posint, true));
-        $orientation = intval(self::getArg('o', AT_posint, true));
+        $tileId = intval($this->getArg('t', AT_posint, true));
+        $x = intval($this->getArg('x', AT_posint, true));
+        $y = intval($this->getArg('y', AT_posint, true));
+        $orientation = intval($this->getArg('o', AT_posint, true));
         $this->game->action_placeTile($tileId, $x, $y, $orientation);
 
-        self::ajaxResponse();
+        $this->ajaxResponse();
     }
 
     public function discard()
     {
-        self::setAjaxMode();
+        $this->setAjaxMode();
         
-        $tileId = intval(self::getArg('t', AT_posint, true));
+        $tileId = intval($this->getArg('t', AT_posint, true));
         $this->game->action_discard($tileId);
 
-        self::ajaxResponse();
+        $this->ajaxResponse();
     }
 
     public function move()
     {
-        self::setAjaxMode();
+        $this->setAjaxMode();
         
-        $tileId = intval(self::getArg('t', AT_posint, true));
-        $x = intval(self::getArg('x', AT_posint, true));
-        $y = intval(self::getArg('y', AT_posint, true));
+        $tileId = intval($this->getArg('t', AT_posint, true));
+        $x = intval($this->getArg('x', AT_posint, true));
+        $y = intval($this->getArg('y', AT_posint, true));
         $this->game->action_move($tileId, $x, $y);
 
-        self::ajaxResponse();
+        $this->ajaxResponse();
     }
 
-    public function moveWarder()
+    public function moveNpc()
     {
-        self::setAjaxMode();
+        $this->setAjaxMode();
         
-        $tileId = intval(self::getArg('t', AT_posint, true));
-        $x = intval(self::getArg('x', AT_posint, true));
-        $y = intval(self::getArg('y', AT_posint, true));
-        $w = self::getArg('w', AT_alphanum, true);
-        $p = self::getArg('p', AT_alphanum, false, null);
-        $this->game->action_moveWarder($tileId, $x, $y, $w, $p);
+        // TODO: moveNumber (in all actions)
+        $tileId = intval($this->getArg('t', AT_posint, true));
+        $x = intval($this->getArg('x', AT_posint, true));
+        $y = intval($this->getArg('y', AT_posint, true));
+        $w = $this->getArg('w', AT_alphanum, true);
+        $p = $this->getArg('p', AT_alphanum, false, null);
+        $this->game->action_moveNpc($tileId, $x, $y, $w, $p);
 
-        self::ajaxResponse();
+        $this->ajaxResponse();
     }
 
     public function add()
     {
-        self::setAjaxMode();
+        $this->setAjaxMode();
         
-        $tileId = intval(self::getArg('t', AT_posint, true));
-        $d = trim(self::getArg('d', AT_numberlist, false, ''));
-        $discardTileIds = strlen($d) ? array_map(fn($s) => intval($s), explode(',', self::getArg('d', AT_numberlist, false, ''))) : [];
+        $tileId = intval($this->getArg('t', AT_posint, true));
+        $d = trim($this->getArg('d', AT_numberlist, false, ''));
+        $discardTileIds = strlen($d) ? array_map(fn($s) => intval($s), explode(',', $this->getArg('d', AT_numberlist, false, ''))) : [];
         $this->game->action_add($tileId, $discardTileIds);
 
-        self::ajaxResponse();
+        $this->ajaxResponse();
     }
 
     public function surrender()
     {
-        self::setAjaxMode();
+        $this->setAjaxMode();
         
-        $tileId = intval(self::getArg('t', AT_posint, true));
+        $tileId = intval($this->getArg('t', AT_posint, true));
         $this->game->action_surrender($tileId);
 
-        self::ajaxResponse();
+        $this->ajaxResponse();
     }
 
     public function escape()
     {
-        self::setAjaxMode();
+        $this->setAjaxMode();
         
-        $d = trim(self::getArg('d', AT_numberlist, false, ''));
-        $discardTileIds = strlen($d) ? array_map(fn($s) => intval($s), explode(',', self::getArg('d', AT_numberlist, false, ''))) : [];
+        $d = trim($this->getArg('d', AT_numberlist, false, ''));
+        $discardTileIds = strlen($d) ? array_map(fn($s) => intval($s), explode(',', $this->getArg('d', AT_numberlist, false, ''))) : [];
         $this->game->action_escape($discardTileIds);
 
-        self::ajaxResponse();
+        $this->ajaxResponse();
     }
 
     public function drawTiles()
     {
-        self::setAjaxMode();
+        $this->setAjaxMode();
         
-        $governorTileId = intval(self::getArg('t', AT_posint, true));
+        $governorTileId = intval($this->getArg('t', AT_posint, true));
         $this->game->action_drawTiles($governorTileId);
 
-        self::ajaxResponse();
+        $this->ajaxResponse();
     }
 }

@@ -24,7 +24,7 @@ class Fled extends Table implements FledEvents
         
         self::initGameStateLabels([
             // Game Options
-            //"houndExpansion" => 100, // TODO
+            FLED_OPT_HOUND => FLED_OPT_HOUND,
             //"specterExpansion" => 101,
         ]);
 
@@ -116,7 +116,7 @@ class Fled extends Table implements FledEvents
 
         $fledOptions = [
             'specterExpansion' => false, // TODO
-            'houndExpansion' => false, // TODO
+            'houndExpansion' => $this->getGameStateValue(FLED_OPT_HOUND) == FLED_OPT_HOUND_YES,
         ];
         
         $fled = FledLogic::newGame($playerColorIndices, $fledOptions, $this);
@@ -460,7 +460,7 @@ class Fled extends Table implements FledEvents
         ]);
     }
 
-    function action_moveWarder($tileId, $x, $y, $w, $p)
+    function action_moveNpc($tileId, $x, $y, $w, $p)
     {
         $playerId = $this->validateCaller();
 
@@ -468,7 +468,7 @@ class Fled extends Table implements FledEvents
         $stateBefore = $fled->toJson();
         try
         {
-            $fled->discardTileToMoveWarder($tileId, $x, $y, $w, $p);
+            $fled->discardTileToMoveNpc($tileId, $x, $y, $w, $p);
         }
         catch (Throwable $e)
         {
@@ -485,7 +485,7 @@ class Fled extends Table implements FledEvents
                 '    $w = "' . $w . '";',
                 '    $p = "' . $p . '";',
                 '',
-                '    $fled->discardTileToMoveWarder($tileId, $x, $y, $w, $p);',
+                '    $fled->discardTileToMoveNpc($tileId, $x, $y, $w, $p);',
                 '',
                 '    $this->assertTrue(true);',
                 '}',
@@ -508,13 +508,14 @@ class Fled extends Table implements FledEvents
         ]);
     }
 
-    function onTilePlayedToMoveWarder($activePlayerId, $targetPlayerId, $tileId, $x, $y, $npcName, $path)
+    function onTilePlayedToMoveNpc($activePlayerId, $targetPlayerId, $tileId, $x, $y, $npcName, $path)
     {
         //
         // Update stats
         //
         $distance = count($path) - 1;
-        $this->incStat($distance, 'warder_distance');
+        if (FledLogic::isWarder($npcName))
+            $this->incStat($distance, 'warder_distance');
 
         //
         // Notify Players
@@ -526,7 +527,7 @@ class Fled extends Table implements FledEvents
 
         $tile = FledLogic::$FledTiles[$tileId];
         $itemId = $tile['contains'];
-        $this->notifyAllPlayers('tilePlayedToMoveWarder', $msg, [
+        $this->notifyAllPlayers('tilePlayedToMoveNpc', $msg, [
             'i18n' => [ '_tile', '_npc' ],
             '_tile' => $this->Items[$itemId]['one'],
             '_npc' =>

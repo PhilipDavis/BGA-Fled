@@ -1,1 +1,16 @@
-{}
+{
+    "100": {
+        "name": "Expansion: The Governor's Hound",
+        "values": {
+            "1": {
+                "name": "no",
+                "tmdisplay": "Base game rules"
+            },
+            "2": {
+                "name": "yes",
+                "tmdisplay": "Unlike his master, the hound was a kind soul, eager to please. The canine’s penchant for fetching contraband did not go unnoticed by the prisoners, who often rewarded him with a tasty bone."
+            }
+        },
+        "default": 1
+    }
+}

@@ -672,6 +672,55 @@
 }
 .fled_tile-75-1 { background-position-y: -70em; }
 
+.fled_tile-80 {
+    background-image: url(img/extras/fled_tiles3.png);
+    background-size: 40em 40em;
+    background-position: 0em 0em;
+}
+.fled_tile-80-1 { background-position-y: -10em; }
+
+.fled_tile-81 {
+    background-image: url(img/extras/fled_tiles3.png);
+    background-size: 40em 40em;
+    background-position: -10em 0em;
+}
+.fled_tile-81-1 { background-position-y: -10em; }
+
+.fled_tile-82 {
+    background-image: url(img/extras/fled_tiles3.png);
+    background-size: 40em 40em;
+    background-position: -20em 0em;
+}
+.fled_tile-82-1 { background-position-y: -10em; }
+
+.fled_tile-83 {
+    background-image: url(img/extras/fled_tiles3.png);
+    background-size: 40em 40em;
+    background-position: -30em 0em;
+}
+.fled_tile-83-1 { background-position-y: -10em; }
+
+.fled_tile-84 {
+    background-image: url(img/extras/fled_tiles3.png);
+    background-size: 40em 40em;
+    background-position: 0em -20em;
+}
+.fled_tile-84-1 { background-position-y: -30em; }
+
+.fled_tile-85 {
+    background-image: url(img/extras/fled_tiles3.png);
+    background-size: 40em 40em;
+    background-position: -10em -20em;
+}
+.fled_tile-85-1 { background-position-y: -30em; }
+
+.fled_tile-90 {
+    background-image: url(img/extras/fled_tiles3.png);
+    background-size: 40em 40em;
+    background-position: -20em -20em;
+}
+.fled_tile-90-1 { background-position-y: -30em; }
+
 
 /* Rooms */
 
@@ -706,7 +755,7 @@
 .fled_meeple-green    { background-position:  -6em      0; }
 .fled_meeple-orange   { background-position: -12em      0; }
 .fled_meeple-yellow   { background-position:     0 -7.5em; }
-.fled_meeple-dog      { background-position:  -6em -7.5em; }
+.fled_meeple-hound    { background-position:  -6em -7.5em; }
 .fled_meeple-ghost    { background-position: -12em -7.5em; }
 .fled_meeple-warder   { background-position: -18em      0; }
 .fled_meeple-chaplain { background-position: -18em -7.5em; }
@@ -1279,8 +1328,9 @@
 .fled_log-npc-warder2,
 .fled_log-npc-warder3,
 .fled_log-npc-warder { background-position: -15em  0em; }
-
 .fled_log-npc-chaplain { background-position: -15em  -2.864em; }
+.fled_log-npc-hound { background-position: -18em  -2.864em; }
+.fled_log-npc-ghost { background-position: -18em  -5.728em; }
 
 
 .fled_icon {
@@ -1314,7 +1364,7 @@
 .fled_icon-21.fled_gold { background-position:  0em   -5.728em; } /* gold file */
 .fled_icon-22.fled_gold { background-position: -9.0em -5.728em; } /* gold boot */
 .fled_icon-23.fled_gold { background-position: -6.0em -5.728em; } /* gold spoon */
-/* TODO: purple bone */
+.fled_icon-50 { background-position: -12.0em -5.728em; } /* purple bone */
 /* TODO: moon */
 /* TODO: victory scroll */
 
@@ -1396,6 +1446,14 @@
 .fled_log-tile-73 { background-position: -12.0em 0em; }
 .fled_log-tile-74 { background-position:  0em   0em; }
 .fled_log-tile-75 { background-position: -12.0em 0em; }
+
+.fled_log-tile-80 { background-position: -12.0em 0em; }
+.fled_log-tile-81 { background-position: -12.0em 0em; }
+.fled_log-tile-82 { background-position: -12.0em 0em; }
+.fled_log-tile-83 { background-position: -12.0em -5.728em; }
+.fled_log-tile-84 { background-position: -12.0em -5.728em; }
+.fled_log-tile-85 { background-position: -12.0em -5.728em; }
+.fled_log-tile-90 { background-position: -3.0em -5.728em; }
 
 
 /* Confirm Countdown */

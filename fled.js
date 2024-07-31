@@ -39,6 +39,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
         isDoubleTile,
         isWhistleTile,
         isShamrockTile,
+        isBoneTile,
         unpackCell,
         RollCallTiles,
         Tiles,
@@ -137,7 +138,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
     const Preference = {
         ConfirmWhenMoving: 300,
-        ConfirmWhenMovingWarder: 301,
+        ConfirmWhenMovingNpc: 301,
         ConfirmWhenAddingToInventory: 302,
         ConfirmWhenSurrenderingTile: 303,
         ConfirmWhenDiscarding: 304,
@@ -894,7 +895,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     delete this.clientStateArgs.selectedTileId;
                     delete this.clientStateArgs.selectedInventoryTileIds;
                     delete this.clientStateArgs.selectedCoords;
-                    delete this.clientStateArgs.selectedWarder
+                    delete this.clientStateArgs.selectedNpc;
                     delete this.clientStateArgs.selectedPlayer;
                     this.destroyAllSlots();
                     this.makeMeeplesNonSelectable();
@@ -915,9 +916,19 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     }
                     break;
 
-                case 'client_selectSelfOrWarderToMove':
+                case 'client_selectHoundDestination':
+                    const houndMoves = fled.getLegalHoundMoves();
+                    for (const { path } of houndMoves) {
+                        const [ x, y ] = path[path.length - 1];
+                        this.createDestinationSlot(x, y);
+                    }
+                    break;
+
+                case 'client_selectSelfOrNpcToMove':
                     this.makeSelfSelectable();
                     this.makeWardersSelectable();
+                    this.makeHoundSelectable();
+                    this.makeSpecterSelectable();
                     break;
 
                 case 'client_selectWarderToMove':
@@ -925,7 +936,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     break;
 
                 case 'client_selectWarderDestination':
-                    const warderMoves = fled.getLegalWarderMoves(this.clientStateArgs.selectedWarder);
+                    const warderMoves = fled.getLegalWarderMoves(this.clientStateArgs.selectedNpc);
                     for (const { path } of warderMoves) {
                         const [ x, y ] = path[path.length - 1];
                         this.createDestinationSlot(x, y);
@@ -938,7 +949,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     this.makeMeeplesSelectable(playersInRoom);
                     break;
                 }
-                case 'client_confirmWarderMovement': {
+                case 'client_confirmNpcMovement': {
                     const { selectedCoords, selectedPlayer } = this.clientStateArgs;
                     const { x, y } = selectedCoords;
                     const { tileId } = unpackCell(fled.getTileAt(x, y));
@@ -987,7 +998,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     delete this.clientStateArgs.selectedTileId;
                     delete this.clientStateArgs.selectedInventoryTileIds;
                     delete this.clientStateArgs.selectedCoords;
-                    delete this.clientStateArgs.selectedWarder
+                    delete this.clientStateArgs.selectedNpc;
                     delete this.clientStateArgs.selectedPlayer;
                     this.destroyAllSlots();
                     this.makeMeeplesNonSelectable();
@@ -1024,7 +1035,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     this.makeTilesNonSelectable();
                     break;
 
-                case 'client_selectSelfOrWarderToMove': // fall through
+                case 'client_selectSelfOrNpcToMove': // fall through
                 case 'client_selectWarderToMove':
                     this.makeMeeplesNonSelectable();
                     break;
@@ -1037,7 +1048,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     this.makeMeeplesNonSelectable();
                     break;
 
-                case 'client_confirmWarderMovement':
+                case 'client_confirmNpcMovement':
                     this.makeMeeplesNonSelectable();
                     break;
 
@@ -1121,12 +1132,16 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     this.addActionButton(`fled_button-cancel-movement2`, _('Cancel'), () => this.onClickCancelMove(), null, false, 'red');
                     break;
 
+                case 'client_selectHoundDestination':
+                    this.addActionButton(`fled_button-cancel-hound-movement`, _('Cancel'), () => this.onClickCancelMove(), null, false, 'red');
+                    break;
+
                 case 'client_confirmMovement':
                     this.addConfirmButton(`fled_button-confirm-movement`, Preference.ConfirmWhenMoving, () => this.onClickConfirmMovement());
                     this.addActionButton(`fled_button-cancel-movement3`, _('Cancel'), () => this.onClickCancelMove(), null, false, 'red');
                     break;
 
-                case 'client_selectSelfOrWarderToMove':
+                case 'client_selectSelfOrNpcToMove':
                     this.addActionButton(`fled_button-cancel-self-or-warder-movement`, _('Cancel'), () => this.onClickCancelMove(), null, false, 'red');
                     break;
 
@@ -1142,8 +1157,8 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     this.addActionButton(`fled_button-cancel-warder-movement3`, _('Cancel'), () => this.onClickCancelMove(), null, false, 'red');
                     break;
 
-                case 'client_confirmWarderMovement':
-                    this.addConfirmButton(`fled_button-confirm-warder-movement`, Preference.ConfirmWhenMovingWarder, this.onClickConfirmWarderMovement);
+                case 'client_confirmNpcMovement':
+                    this.addConfirmButton(`fled_button-confirm-warder-movement`, Preference.ConfirmWhenMovingNpc, this.onClickConfirmNpcMovement);
                     this.addActionButton(`fled_button-cancel-warder-movement4`, _('Cancel'), () => this.onClickCancelMove(), null, false, 'red');
                     break;
 
@@ -1374,6 +1389,14 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
 
         makeWardersSelectable() {
             this.makeMeeplesSelectable([ 'warder1', 'warder2', 'warder3', 'chaplain' ]);
+        },
+
+        makeHoundSelectable() {
+            this.makeMeeplesSelectable([ 'hound' ]);
+        },
+
+        makeSpecterSelectable() {
+            this.makeMeeplesSelectable([ 'ghost' ]);
         },
 
         makeMeeplesSelectable(names) {
@@ -3053,8 +3076,14 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                         });
                     }
                     else if (isShamrockTile(tileId)) {
-                        this.setClientState('client_selectSelfOrWarderToMove', {
+                        this.setClientState('client_selectSelfOrNpcToMove', {
                             descriptionmyturn: _('${you} must select who to move'),
+                        });
+                    }
+                    else if (isBoneTile(tileId)) {
+                        this.clientStateArgs.selectedNpc = 'hound';
+                        this.setClientState('client_selectHoundDestination', {
+                            descriptionmyturn: _('${you} must select a destination for the hound'),
                         });
                     }
                     else {
@@ -3111,15 +3140,27 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             console.log(`onClickMeeple(${name})`);
 
             switch (this.currentState) {
-                case 'client_selectSelfOrWarderToMove': {
+                case 'client_selectSelfOrNpcToMove': {
                     const color = MeepleNames.indexOf(name);
                     if (color >= 0) {
                         this.setClientState('client_selectPlayerDestination', {
                             descriptionmyturn: _('${you} must select your destination'),
                         });
                     }
+                    else if (name === 'hound') {
+                        this.clientStateArgs.selectedNpc = name;
+                        this.setClientState('client_selectHoundDestination', {
+                            descriptionmyturn: _('${you} must select a destination for the hound'),
+                        });
+                    }
+                    else if (name === 'ghost') {
+                        this.clientStateArgs.selectedNpc = name;
+                        this.setClientState('client_selectSpecterDestination', {
+                            descriptionmyturn: _('${you} must select a destination for the specter'),
+                        });
+                    }
                     else {
-                        this.clientStateArgs.selectedWarder = name;
+                        this.clientStateArgs.selectedNpc = name;
                         this.setClientState('client_selectWarderDestination', {
                             descriptionmyturn:
                                 name === 'chaplain'
@@ -3131,7 +3172,7 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     break;
                 }
                 case 'client_selectWarderToMove':
-                    this.clientStateArgs.selectedWarder = name;
+                    this.clientStateArgs.selectedNpc = name;
                     this.setClientState('client_selectWarderDestination', {
                         descriptionmyturn:
                             name === 'chaplain'
@@ -3144,10 +3185,10 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 case 'client_selectPlayerToTarget':
                     this.clientStateArgs.selectedPlayer = name;
                     this.askConfirmationOrInvoke({
-                        state: 'client_confirmWarderMovement',
+                        state: 'client_confirmNpcMovement',
                         prompt: _('${you} must confirm the movement'),
-                        pref: Preference.ConfirmWhenMovingWarder,
-                        bypass: this.onClickConfirmWarderMovement,
+                        pref: Preference.ConfirmWhenMovingNpc,
+                        bypass: this.onClickConfirmNpcMovement,
                     });
                     break;
             }
@@ -3206,6 +3247,20 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 });
                 return;
             }
+            else if (this.currentState === 'client_selectHoundDestination') {
+                this.deselectAll('fled_board');
+                this.clientStateArgs.selectedCoords = { x, y };
+                const destDiv = document.getElementById(`fled_slot-${x}-${y}`);
+                destDiv.classList.add('fled_selected');
+
+                this.askConfirmationOrInvoke({
+                    state: 'client_confirmNpcMovement',
+                    prompt: _('${you} must confirm the hound movement'),
+                    pref: Preference.ConfirmWhenMovingNpc,
+                    bypass: this.onClickConfirmNpcMovement,
+                });
+                return;
+            }
             else if (this.currentState === 'client_selectWarderDestination') {
                 this.deselectAll('fled_board'); // TODO: only deselect if multiple meeples in room
                 this.clientStateArgs.selectedCoords = { x, y };
@@ -3222,10 +3277,10 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                     // TODO: differentiate between the different NPCs... I think chaplain is currently lumped in here...
                     this.clientStateArgs.selectedPlayer = meeples[0];
                     this.askConfirmationOrInvoke({
-                        state: 'client_confirmWarderMovement',
+                        state: 'client_confirmNpcMovement',
                         prompt: _('${you} must confirm the warder movement'),
-                        pref: Preference.ConfirmWhenMovingWarder,
-                        bypass: this.onClickConfirmWarderMovement,
+                        pref: Preference.ConfirmWhenMovingNpc,
+                        bypass: this.onClickConfirmNpcMovement,
                     });
                 }
                 return;
@@ -3422,13 +3477,14 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             // TODO: lock the UI while the above call is happening
         },
 
-        async onClickConfirmWarderMovement() {
-            if (this.currentState !== 'client_confirmWarderMovement' &&
+        async onClickConfirmNpcMovement() {
+            if (this.currentState !== 'client_confirmNpcMovement' &&
                 this.currentState !== 'client_selectWarderDestination' &&
+                this.currentState !== 'client_selectHoundDestination' &&
                 this.currentState !== 'client_selectPlayerToTarget') return;
             const t = this.clientStateArgs.selectedTileId;
             let { x, y } = this.clientStateArgs.selectedCoords;
-            const w = this.clientStateArgs.selectedWarder;
+            const w = this.clientStateArgs.selectedNpc;
             const p = this.clientStateArgs.selectedPlayer;
 
             this.destroyAllSlots();
@@ -3442,8 +3498,13 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
                 y = headPos.y;
             }
 
-            await this.invokeServerActionAsync('moveWarder', { t, x, y, w, p });
+            await invokeServerActionAsync('moveNpc', fled.moveNumber, { t, x, y, w, p });
             // TODO: lock the UI while the above call is happening
+
+            delete this.clientStateArgs.selectedTileId;
+            delete this.clientStateArgs.selectedCoords;
+            delete this.clientStateArgs.selectedNpc;
+            delete this.clientStateArgs.selectedPlayer;
         },
 
         async onClickCancelMove() {
@@ -3838,14 +3899,18 @@ function (dojo, declare, aspect, FledLogicModule, { animateDropAsync, bounceFact
             }
         },
 
-        async notify_tilePlayedToMoveWarder({ playerId, tile: tileId, x, y, npc: npcName }) {
-            fled.moveWarder(playerId, tileId, npcName, x, y);
+        async notify_tilePlayedToMoveNpc({ playerId, tile: tileId, x, y, npc: npcName }) {
+            fled.moveNpc(playerId, tileId, npcName, x, y);
 
             this.makeMeeplesNonSelectable();
             this.deselectAll();
 
             await this.animateDiscardHandTileAsync(tileId);
             await this.animateNpcMoveAsync(npcName, x, y);
+
+            if (playerId == this.myPlayerId && npcName == 'hound') {
+                this.onFirstActionDone();
+            }
         },
 
         async notify_missedTurn({ playerId }) {
