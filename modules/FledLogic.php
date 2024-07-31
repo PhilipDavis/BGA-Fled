@@ -1976,7 +1976,7 @@ six tiles... TODO
 
         $this->eventHandlers->onMissedTurn($playerId);
         $this->eventHandlers->onPlayerSentToBunk($playerId);
-        $this->eventHandlers->onPlayerUnshackled($playerId, $unshackleTile, $this->getPlayerScore($playerId));
+        $this->eventHandlers->onPlayerUnshackled($playerId, $unshackleTile, $this->getPlayerScore($playerId), $this->getPlayerAuxScore($playerId));
     }
 
     public function addTileToInventory($tileId, $discards)

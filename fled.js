@@ -681,7 +681,7 @@ function (dojo, declare,
             }
             const divId = `fled_slot-${x}-${y}`;
             const existing = document.getElementById(divId);
-            if (existing) return;
+            if (existing) return existing;
             const baseOffsetX = 2;
             const baseOffsetY = 2;
             dojo.place(this.format_block('fled_Templates.slot', {
@@ -1765,7 +1765,7 @@ function (dojo, declare,
         //
         // Calculate scale factor and board offsets
         //
-        calculateZoom(cells) {
+        calculateZoom(cells, { noExpand = false } = {}) {
             const containerDiv = document.getElementById('fled_board-container');
             const containerRect = containerDiv.getBoundingClientRect();
 
@@ -1806,7 +1806,9 @@ function (dojo, declare,
                 scale *= containerRect.width / effectiveBoardWidth;
 
                 // Also trigger the board container to grow in height
-                this.expandBoardContainer();
+                if (!noExpand) {
+                    this.expandBoardContainer();
+                }
             }
 
             const xUnit = ((cells.x2 - cells.x1 + 1) / 2 + cells.x1) * 2 / FledWidth - 1;
@@ -1826,6 +1828,10 @@ function (dojo, declare,
             const width = containerDiv.getBoundingClientRect().width;
             const height = width * FledHeight / FledWidth;
             containerDiv.style.height = `${height}px`;
+
+            document.getElementById('fled_board-button-expand').classList.add('fled_hidden');
+            document.getElementById('fled_board-button-collapse').classList.remove('fled_hidden');
+            this.showHideMiniMap();
         },
 
         showHideMiniMap() {
@@ -1955,7 +1961,7 @@ function (dojo, declare,
             return false;
         },
 
-        async animateSmartZoomAsync(force = false) {
+        async animateSmartZoomAsync({ force = false, noExpand = false } = {}) {
             const isAddingTiles =
                 this.isCurrentPlayerActive() &&
                 (this.currentState == 'addTile' || this.currentState == 'addStarterTile' || this.currentState == 'client_confirmTilePlacement') &&
@@ -1963,7 +1969,7 @@ function (dojo, declare,
             ;
 
             const cells = this.calculateSmartZoomCells(isAddingTiles ? 2 : 1);
-            const smartZoom = this.calculateZoom(cells);
+            const smartZoom = this.calculateZoom(cells, { noExpand });
             if (!force && !this.hasSmartZoomChanged(smartZoom)) {
                 return;
             }
@@ -2861,7 +2867,7 @@ function (dojo, declare,
             const container = document.getElementById('fled_board-container');
             container.style.height = '32em';
             this.reflow(container);
-            await this.animateSmartZoomAsync(true);
+            await this.animateSmartZoomAsync({ force: true, noExpand: true });
             this.showHideMiniMap();
             this.clientStateArgs.boardContainerExpanded = false;
             document.getElementById('fled_board-button-expand').classList.remove('fled_hidden');
@@ -3614,16 +3620,6 @@ function (dojo, declare,
 
 
         ///////////////////////////////////////////////////
-        //// Log message helpers
-
-        getLogHtml(type, id) {
-            return this.format_block(`fled_Templates.${type}LogIcon`, {
-                ID: id,
-            });
-        },
-
-
-        ///////////////////////////////////////////////////
         //// Reaction to cometD notifications
 
         async notify_tileDiscarded({ playerId, tile: tileId, gov }) {
@@ -3867,6 +3863,7 @@ function (dojo, declare,
         async notify_prisonerEscaped({ playerId, score }) {
             const player = fled.players[playerId];
             const [ x, y ] = player.pos;
+            const headPos = fled.getTileHeadPos(x, y);
 
             // Scroll the board into view
             const containerDiv = document.getElementById('fled_board-container');
@@ -3875,7 +3872,6 @@ function (dojo, declare,
             await this.delayAsync(500);
 
             // Zoom in on the escaping player
-            const headPos = fled.getTileHeadPos(x, y);
             const { zoom } = this.calculateZoom({ x1: headPos.x - 2, y1: headPos.y - 2, x2: headPos.x + 2, y2: headPos.y + 2 });
 
             const xUnit = (headPos.x * 2) / FledWidth - 1;
