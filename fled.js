@@ -2229,14 +2229,16 @@ function (dojo, declare,
 
             // There currently is no discard pile... just animate up and fade out
 
-            await tileDiv.animate({
-                opacity: [ 0 ],
-                // TODO: transform: [ `translate(${x}em, ${y - 10}em) rotateZ(0deg)` ],
-            }, {
-                duration: ShortDuration,
-                easing: 'ease-out',
-                fill: 'forwards',
-            }).finished;
+            if (!this.instantaneousMode) {
+                await tileDiv.animate({
+                    opacity: [ 0 ],
+                    // TODO: transform: [ `translate(${x}em, ${y - 10}em) rotateZ(0deg)` ],
+                }, {
+                    duration: ShortDuration,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
+            }
 
             tileDiv.parentElement.removeChild(tileDiv);
         },
@@ -2522,16 +2524,18 @@ function (dojo, declare,
             const { x, y, deg } = PlayerHandSlots[tileCount][tileIndex];
 
             const newTransform = `translate(${x}em, ${y}em) rotateZ(${deg}deg)`;
-            await tileDiv.animate({
-                transform: [
-                    tileDiv.style.transform,
-                    newTransform,
-                ],
-            }, {
-                duration: ShortDuration,
-                easing: 'ease-out',
-                fill: 'forwards',
-            }).finished;
+            if (!this.instantaneousMode) {
+                await tileDiv.animate({
+                    transform: [
+                        tileDiv.style.transform,
+                        newTransform,
+                    ],
+                }, {
+                    duration: ShortDuration,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
+            }
 
             // Don't trust fill: forwards because it seems a little too permanent / difficult to remove
             // and .commitStyles() didn't seem to do anything.
@@ -2769,6 +2773,9 @@ function (dojo, declare,
         },
 
         async animateTransitionAsync(div, fnStyle) {
+            if (this.instantaneousMode) {
+                fnStyle(div.style);
+            }
             return new Promise(resolve => {
                 const timeoutId = setTimeout(done, LongDuration + 100);
                 function done() {
@@ -2785,6 +2792,9 @@ function (dojo, declare,
 
         async transitionInAsync(div, className, timeout = 1000) {
             if (div.classList.contains(className)) return;
+            if (this.instantaneousMode) {
+                div.classList.add(className);
+            }
             await new Promise(resolve => {
                 const timeoutId = setTimeout(done, timeout);
                 function done() {
@@ -2801,6 +2811,9 @@ function (dojo, declare,
 
         async transitionOutAsync(div, className, timeout = 1000) {
             if (!div.classList.contains(className)) return;
+            if (this.instantaneousMode) {
+                div.classList.remove(className);
+            }
             await new Promise(resolve => {
                 const timeoutId = setTimeout(done, timeout);
                 function done() {
@@ -3865,21 +3878,23 @@ function (dojo, declare,
             const [ x, y ] = player.pos;
             const headPos = fled.getTileHeadPos(x, y);
 
-            // Scroll the board into view
-            const containerDiv = document.getElementById('fled_board-container');
-            containerDiv.scrollIntoView({ block: 'center', inline: 'center', behaviour: 'smooth' });
+            if (!this.instantaneousMode) {
+                // Scroll the board into view
+                const containerDiv = document.getElementById('fled_board-container');
+                containerDiv.scrollIntoView({ block: 'center', inline: 'center', behaviour: 'smooth' });
             
-            await this.delayAsync(500);
+                await this.delayAsync(500);
 
-            // Zoom in on the escaping player
-            const { zoom } = this.calculateZoom({ x1: headPos.x - 2, y1: headPos.y - 2, x2: headPos.x + 2, y2: headPos.y + 2 });
+                // Zoom in on the escaping player
+                const { zoom } = this.calculateZoom({ x1: headPos.x - 2, y1: headPos.y - 2, x2: headPos.x + 2, y2: headPos.y + 2 });
 
-            const xUnit = (headPos.x * 2) / FledWidth - 1;
-            const yUnit = (headPos.y * 2) / FledHeight - 1;
-            await this.animateZoomToAsync(xUnit, yUnit, zoom);
+                const xUnit = (headPos.x * 2) / FledWidth - 1;
+                const yUnit = (headPos.y * 2) / FledHeight - 1;
+                await this.animateZoomToAsync(xUnit, yUnit, zoom);
+                
+                await this.delayAsync(500);
+            }
             
-            await this.delayAsync(500);
-
             // Move to the forest
             await this.animatePlayerMoveAsync(playerId, headPos.x, headPos.y);
             await this.animatePlayerEscape(playerId);
