@@ -43,7 +43,11 @@ $machinestates = [
         'description' => clienttranslate('${actplayer} must place a tile in the prison'),
         'descriptionmyturn' => clienttranslate('${you} must add your bunk tile to the starting yard tile'),
         'type' => 'activeplayer',
-        'possibleactions' => [ 'placeTile', 'debugSetState' ],
+        'possibleactions' => [
+            'placeTile',
+            'debugSetState',
+            'jsError',
+        ],
         'transitions' => [
             'nextPhase' => STATE_NEXT_TURN,
             'debugSetState' => STATE_DEBUG_SETSTATE,
@@ -68,7 +72,12 @@ $machinestates = [
         'description' => clienttranslate('${actplayer} must add a tile to the prison'),
         'descriptionmyturn' => clienttranslate('${you} must select a tile from your hand to add to the prison'),
         'type' => 'activeplayer',
-        'possibleactions' => [ 'placeTile', 'discard', 'escape' ],
+        'possibleactions' => [
+            'placeTile',
+            'discard',
+            'escape',
+            'jsError',
+        ],
         'transitions' => [
             'nextPhase' => STATE_PLAY_TILES,
             'nextTurn' => STATE_NEXT_TURN, // If player escaped
@@ -81,7 +90,14 @@ $machinestates = [
         'description' => clienttranslate('${actplayer} must play tiles'),
         'descriptionmyturn' => '',
         'type' => 'activeplayer',
-        'possibleactions' => [ 'move', 'moveWarder', 'add', 'surrender', 'escape' ],
+        'possibleactions' => [
+            'move',
+            'moveNpc',
+            'add',
+            'surrender',
+            'escape',
+            'jsError',
+        ],
         'transitions' => [
             'nextTile' => STATE_PLAY_TILES,
             'nextPhase' => STATE_DRAW_TILES,
@@ -95,7 +111,11 @@ $machinestates = [
         'description' => clienttranslate('${actplayer} must draw tiles'),
         'descriptionmyturn' => clienttranslate('${you} must draw tiles'),
         'type' => 'activeplayer',
-        'possibleactions' => [ 'drawTiles', 'escape' ],
+        'possibleactions' => [
+            'drawTiles',
+            'escape',
+            'jsError',
+        ],
         'transitions' => [
             'nextTurn' => STATE_NEXT_TURN,
         ],

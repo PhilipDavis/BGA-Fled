@@ -2990,6 +2990,9 @@ six tiles... TODO
 
     function toJson()
     {
-        return json_encode($this->data);
+        $json = json_encode($this->data);
+        if (!$json)
+            throw new Exception('Failed to encode game state to JSON: ' . serialize($this->data));
+        return $json;
     }
 }

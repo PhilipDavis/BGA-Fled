@@ -169,13 +169,23 @@ class Fled extends Table implements FledEvents
     {
         if (!$this->fled)
         {
-            $json = $this->getObjectFromDB("SELECT id, doc FROM game_state LIMIT 1")['doc'];
-            $this->fled = FledLogic::fromJson($json, $this);
+            try
+            {
+                $json = $this->getObjectFromDB("SELECT id, doc FROM game_state LIMIT 1")['doc'];
+                if (!$json)
+                    throw new Exception('Failed to load game state JSON');
+                $this->fled = FledLogic::fromJson($json, $this);
+            }
+            catch (Throwable $e)
+            {
+                $this->error($e->getTraceAsString());
+                throw $e;
+            }
         }
         return $this->fled;
     }
 
-    protected function saveGameState($fled)
+    protected function saveGameState(FledLogic $fled)
     {
         $json = $fled->toJson();
         $this->DbQuery("UPDATE game_state SET doc = '$json'");
@@ -236,6 +246,18 @@ class Fled extends Table implements FledEvents
         $this->saveGameState($fled);
 
         $this->gamestate->nextState('debugSetState');
+    }
+
+    public function action_jsError($msg, $url, $line, $userAgent)
+    {
+        $this->error(implode(PHP_EOL, [
+            '##### Client Error #####',
+            '- error: ' . $msg,
+            '- url: ' . $url,
+            '- line: ' . $line,
+            '- ua: ' . $userAgent,
+            '########################',
+        ]));
     }
 
     //
@@ -474,6 +496,7 @@ class Fled extends Table implements FledEvents
         {
             $refId = uniqid();
             $test = implode(' ', [
+                '/***** Exception: ' . $e->getMessage() . ' *****/',
                 'function testRef' . $refId . '() {',
                 '    $fled = $this->loadFromJson(',
                 "       '" . $stateBefore . "'",
@@ -489,6 +512,7 @@ class Fled extends Table implements FledEvents
                 '',
                 '    $this->assertTrue(true);',
                 '}',
+                '/*' . '**********/',
             ]);
             $this->error($test);
             throw new Exception("Invalid operation - Ref #" . $refId); // NOI18N

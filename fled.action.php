@@ -128,4 +128,17 @@ class action_fled extends APP_GameAction
 
         $this->ajaxResponse();
     }
+
+    public function jsError()
+    {
+        $this->setAjaxMode();
+
+        $userAgent = $_POST['ua'];
+        $url = $_POST['url'];
+        $msg = $_POST['msg'];
+        $line = $_POST['line'];
+        $this->game->action_jsError($msg, $url, $line, $userAgent);
+
+        $this->ajaxResponse();
+    }
 }
