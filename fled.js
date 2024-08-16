@@ -2498,27 +2498,29 @@ function (dojo, declare,
 
             const intermediateAngle = deltaY ? -Math.atan(deltaX / deltaY) / Math.PI * 180 : 0;
 
-            const slidePromise = tileDiv.animate({
-                transform: [
-                    tileDiv.style.transform,
-                    `translate(${x}em, ${y}em) rotateZ(${intermediateAngle}deg)`,
-                    `translate(calc(${x}em + ${deltaX}px), calc(${y}em + ${deltaY}px)) rotateZ(0deg)`,
-                ],
-            }, {
-                duration: LongDuration,
-                easing: 'ease-out',
-                fill: 'forwards',
-            }).finished;
+            if (!this.instantaneousMode) {
+                const slidePromise = tileDiv.animate({
+                    transform: [
+                        tileDiv.style.transform,
+                        `translate(${x}em, ${y}em) rotateZ(${intermediateAngle}deg)`,
+                        `translate(calc(${x}em + ${deltaX}px), calc(${y}em + ${deltaY}px)) rotateZ(0deg)`,
+                    ],
+                }, {
+                    duration: LongDuration,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
 
-            const closeGapPromise = (async () => {
-                await this.delayAsync(ShortDuration);
-                await this.animateCloseGapInHandAsync();
-            })();
+                const closeGapPromise = (async () => {
+                    await this.delayAsync(ShortDuration);
+                    await this.animateCloseGapInHandAsync();
+                })();
 
-            await Promise.all([
-                slidePromise,
-                closeGapPromise,
-            ]);
+                await Promise.all([
+                    slidePromise,
+                    closeGapPromise,
+                ]);
+            }
 
             this.adjustGovernorsInventoryMargin();
 
@@ -2587,14 +2589,16 @@ function (dojo, declare,
 
             this.raiseElement(tileDiv);
 
-            await tileDiv.animate({
-                transform: [
-                    `translate(${deltaX}px, 0)`,
-                ],
-            }, {
-                duration: ShortDuration,
-                easing: 'ease-out',
-            }).finished;
+            if (!this.instantaneousMode) {
+                await tileDiv.animate({
+                    transform: [
+                        `translate(${deltaX}px, 0)`,
+                    ],
+                }, {
+                    duration: ShortDuration,
+                    easing: 'ease-out',
+                }).finished;
+            }
 
             this.placeInElement(tileDiv, destDiv);
         },
@@ -2626,19 +2630,21 @@ function (dojo, declare,
             const intermediateAngle = deltaY ? -Math.atan(deltaX / deltaY) / Math.PI * 180 : 0;
             const deg = DegFromOrientation[orientation];
 
-            const slideAnimation = srcDiv.animate({
-                transform: [
-                    `translate(${handSlot.x}em, ${handSlot.y}em) rotateZ(${handSlot.deg}deg) scale(1)`,
-                    `translate(${handSlot.x}em, ${handSlot.y}em) rotateZ(${intermediateAngle}deg) scale(1)`,
-                    `translate(calc(${handSlot.x}em + ${deltaX}px), calc(${handSlot.y}em + ${deltaY}px)) rotateZ(${deg}deg) scale(${this.clientStateArgs.currentScale})`,
-                ],
-            }, {
-                duration: LongDuration,
-                easing: 'ease-out',
-            });
+            if (!this.instantaneousMode) {
+                const slideAnimation = srcDiv.animate({
+                    transform: [
+                        `translate(${handSlot.x}em, ${handSlot.y}em) rotateZ(${handSlot.deg}deg) scale(1)`,
+                        `translate(${handSlot.x}em, ${handSlot.y}em) rotateZ(${intermediateAngle}deg) scale(1)`,
+                        `translate(calc(${handSlot.x}em + ${deltaX}px), calc(${handSlot.y}em + ${deltaY}px)) rotateZ(${deg}deg) scale(${this.clientStateArgs.currentScale})`,
+                    ],
+                }, {
+                    duration: LongDuration,
+                    easing: 'ease-out',
+                });
 
-            try { await slideAnimation.finished; } catch (err) {}
-            slideAnimation.commitStyles();
+                try { await slideAnimation.finished; } catch (err) {}
+                slideAnimation.commitStyles();
+            }
 
             // Rather than fiddle with the original tile, create a new one on the board
             this.createTileOnBoard(tileId, x, y, orientation);
@@ -2657,18 +2663,20 @@ function (dojo, declare,
 
             const tileDiv = this.createTileOnBoard(tileId, x, y, orientation, true);
 
-            await tileDiv.animate({
-                transform: [
-                    tileDiv.style.transform + ' scale(1.5)',
-                    tileDiv.style.transform + ' scale(1)',
-                ],
-                opacity: [ 0, 1 ],
-            }, {
-                delay: 200,
-                duration: ShortDuration,
-                easing: 'ease-out',
-                fill: 'forwards',
-            }).finished;
+            if (!this.instantaneousMode) {
+                await tileDiv.animate({
+                    transform: [
+                        tileDiv.style.transform + ' scale(1.5)',
+                        tileDiv.style.transform + ' scale(1)',
+                    ],
+                    opacity: [ 0, 1 ],
+                }, {
+                    delay: 200,
+                    duration: ShortDuration,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
+            }
 
             tileDiv.classList.remove('fled_hidden');
         },
@@ -2697,23 +2705,25 @@ function (dojo, declare,
             const deltaX = destLeftX - srcMidX;
             const deltaY = destTopY - srcMidY;
 
-            const slidePromise = tileDiv.animate({
-                transform: [
-                    `translate(0, 0) rotateZ(0deg) scale(1)`,
-                    `translate(calc(${x}em + ${deltaX}px), calc(${y}em + ${deltaY}px)) rotateZ(${deg}deg) scale(1)`,
-                ],
-            }, {
-                duration: LongDuration,
-                easing: 'ease-out',
-                fill: 'forwards',
-            }).finished;
+            if (!this.instantaneousMode) {
+                const slidePromise = tileDiv.animate({
+                    transform: [
+                        `translate(0, 0) rotateZ(0deg) scale(1)`,
+                        `translate(calc(${x}em + ${deltaX}px), calc(${y}em + ${deltaY}px)) rotateZ(${deg}deg) scale(1)`,
+                    ],
+                }, {
+                    duration: LongDuration,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
 
-            const adjustHandPromise = this.animateHandToMakeRoomForNewTileAsync();
+                const adjustHandPromise = this.animateHandToMakeRoomForNewTileAsync();
 
-            await Promise.all([
-                slidePromise,
-                adjustHandPromise,
-            ]);
+                await Promise.all([
+                    slidePromise,
+                    adjustHandPromise,
+                ]);
+            }
 
             this.createTileInHand(handSlotIndex, handSlots.length + 1, tileId); 
 
@@ -2757,19 +2767,22 @@ function (dojo, declare,
 
             meepleDiv.style.zIndex = y * FledWidth + z; // Don't need to consider x here because no overlap of cells horizontally
 
-            const animation = meepleDiv.animate({
-                transform: [
-                    `translate(${xEm}em, ${yEm}em)`,
-                ],
-            }, {
-                duration: isFast ? ShortDuration : LongDuration,
-                easing: 'ease-out',
-                fill: 'forwards',
-            });
-            
-            await animation.finished;
-            animation.commitStyles();
+            if (!this.instantaneousMode) {
+                const animation = meepleDiv.animate({
+                    transform: [
+                        `translate(${xEm}em, ${yEm}em)`,
+                    ],
+                }, {
+                    duration: isFast ? ShortDuration : LongDuration,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                });
+                
+                await animation.finished;
+                animation.commitStyles();
+            }
 
+            meepleDiv.style.transform = `translate(${xEm}em, ${yEm}em)`;
             meepleDiv.style.zIndex = z;
         },
 
@@ -2786,6 +2799,7 @@ function (dojo, declare,
         },
 
         delayAsync(duration) {
+            if (this.instantaneousMode) return Promise.resolve();
             return new Promise(resolve => setTimeout(resolve, duration));
         },
 
