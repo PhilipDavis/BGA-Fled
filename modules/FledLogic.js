@@ -66,6 +66,11 @@ define([], () => {
         Shamrock: 30,
         Whistle: 40,
         Bone: 50,
+
+        // Note: This is not a real thing in the game.
+        // I'm using it in traversal algorithms to define
+        // the allowable movement of the Spector NPC
+        Ectoplasm: 99,
     };
 
     const SpecialTile = {
@@ -1164,14 +1169,6 @@ define([], () => {
         },
     };
 
-/*
-// Specter Expansion
-S1 - [ghost] double Corridor: EgressType.Archway, EgressType.Archway, , EgressType.Archway | , EgressType.Archway, EgressType.Archway, EgressType.Archway / Gold key
-S2 - ghost tile
-
-// Governor's House Expansion
-six tiles... TODO
-*/
 
     function makeIndex(x, y) {
         if (x < 0 || x >= FledWidth || y < 0 || y >= FledHeight)
@@ -1526,11 +1523,7 @@ six tiles... TODO
             this.removeTileFromHand(playerId, tileId);
             this.data.players[playerId].inventory.push(tileId);
 
-            if (playerId == this.myPlayerId) {
-                this.data.players[playerId].actionsPlayed++;
-            }
             this.data.moves++;
-
             return true;
         }
 
@@ -1545,11 +1538,7 @@ six tiles... TODO
             this.removeTileFromHand(playerId, tileId);
             this.addTileToGovernorInventory(tileId);
 
-            if (playerId == this.myPlayerId) {
-                this.data.players[playerId].actionsPlayed++;
-            }
             this.data.moves++;
-
             return true;
         }
 
@@ -1895,8 +1884,17 @@ six tiles... TODO
         }
     
         getTraversalCost(egress1, egress2, item) {
-            if (egress1 === EgressType.None || egress2 === EgressType.None)
+            if (egress1 === EgressType.None || egress2 === EgressType.None) {
                 return 99;
+            }
+            if (egress1 === EgressType.Open && egress2 === EgressType.Open) {
+                return 0;
+            }
+
+            // Ghost can move through any egress
+            if (item === ItemType.Ectoplasm && this.data.options.specterExpansion) {
+                return 1;
+            }
 
             const needKey = egress1 === EgressType.Door || egress2 == EgressType.Door;
             const needFile = egress1 === EgressType.Window || egress2 === EgressType.Window;
@@ -1911,9 +1909,6 @@ six tiles... TODO
             }
             else if (needFile && (item === ItemType.File || item === ItemType.Shamrock)) {
                 return 1;
-            }
-            else if (egress1 === EgressType.Open && egress2 === EgressType.Open) {
-                return 0;
             }
             return 99;
         }
@@ -2167,20 +2162,20 @@ six tiles... TODO
             ];
         }
 
-        moveNpc(playerId, tileId, npcName, x, y) {
-            this.discardTile(playerId, tileId);
-            if (playerId == this.myPlayerId) {
-                this.data.players[playerId].actionsPlayed++;
-            }
+        getLegalSpecterMoves() {
+            const { specter } = this.data.npcs
+            if (!specter) return [];
+            const [ x, y ] = specter.pos;
+            return this.traverseAboveGround(ItemType.Ectoplasm, x, y, 0, 1);
+        }
+
+        moveNpc(playerId, npcName, x, y) {
             this.data.npcs[npcName].pos = [ x, y ];
         }
 
         movePlayer(playerId, tileId, x, y) {
             this.discardTile(playerId, tileId);
             this.setPlayerPosition(playerId, x, y);
-            if (playerId == this.myPlayerId) {
-                this.data.players[playerId].actionsPlayed++;
-            }
         }
 
         sendToSolitaryConfinement(playerId) {
@@ -2370,6 +2365,10 @@ six tiles... TODO
             return this.data.players[this.myPlayerId].actionsPlayed;
         }
 
+        actionComplete() {
+            this.data.players[this.myPlayerId].actionsPlayed++;
+        }
+
         get isLastTurn() {
             return Object.values(this.data.players).some(p => p.escaped) && this.data.finalTurns > 0;
         }
@@ -2400,6 +2399,20 @@ six tiles... TODO
 
         get npcs() {
             return this.data.npcs;
+        }
+
+        get warderCount() {
+            return Object.keys(this.data.npcs).reduce((sum, npcName) => {
+                return sum + (this.isWarder(npcName) ? 1 : 0);
+            }, 0);
+        }
+
+        isWarder(npcName) {
+            return /warder|chaplain/.test(npcName);
+        }
+
+        get isSpecterInPlay() {
+            return !!this.data.npcs.specter;
         }
 
         playerHasShamrockInInventory(playerId) {

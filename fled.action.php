@@ -25,7 +25,21 @@ class action_fled extends APP_GameAction
             $this->trace('Complete reinitialization of board game');
         }
   	}
-  	
+
+    // Data exchange helper
+    private function getMoveNpcsFromArgList($list)
+    {
+        // Using underscore because it doesn't need to be escaped in the URL
+        $items = explode('_', $list);
+        $untypedChunks = array_chunk($items, 4);
+        return array_map(fn($chunk) => [
+            'npc' => strval($chunk[0]),
+            'x' => intval($chunk[1]),
+            'y' => intval($chunk[2]),
+            'c' => strval($chunk[3]), // Target player colour name
+        ], $untypedChunks);
+    }
+
     public function debugSetState()
     {
         $this->setAjaxMode();
@@ -71,17 +85,14 @@ class action_fled extends APP_GameAction
         $this->ajaxResponse();
     }
 
-    public function moveNpc()
+    public function moveNpcs()
     {
         $this->setAjaxMode();
         
         // TODO: moveNumber (in all actions)
         $tileId = intval($this->getArg('t', AT_posint, true));
-        $x = intval($this->getArg('x', AT_posint, true));
-        $y = intval($this->getArg('y', AT_posint, true));
-        $w = $this->getArg('w', AT_alphanum, true);
-        $p = $this->getArg('p', AT_alphanum, false, null);
-        $this->game->action_moveNpc($tileId, $x, $y, $w, $p);
+        $moves = $this->getMoveNpcsFromArgList($this->getArg('moves', AT_alphanum, true, ''));
+        $this->game->action_moveNpcs($tileId, $moves);
 
         $this->ajaxResponse();
     }

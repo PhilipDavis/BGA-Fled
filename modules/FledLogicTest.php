@@ -44,7 +44,7 @@ final class FledLogicTest extends TestCase
             "warder2": {},
             "warder3": {},
             "chaplain": {},
-            "ghost": {},
+            "specter": {},
             "hound": {}
         },
         "governorInventory": {},
@@ -204,7 +204,7 @@ final class FledLogicTest extends TestCase
                 "warder2": {},
                 "warder3": {},
                 "chaplain": {},
-                "ghost": {},
+                "specter": {},
                 "hound": {}
             },
             "governorInventory": {},
@@ -296,7 +296,17 @@ final class FledLogicTest extends TestCase
         $mockEvents = $this->createMockEvents();
 
         $fled = FledLogic::fromJson(
-            '{"move":10,"npcs":{"warder1":{"pos":[8,6]},"warder2":{"pos":[7,2]}},"board":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,36,0,0,0,0,0,0,0,0,0,0,0,23,0,36,0,0,0,0,0,0,0,0,0,0,0,23,0,48,0,0,0,0,0,0,0,0,0,126,126,150,150,48,1,0,0,0,0,0,0,0,0,0,0,0,146,146,1,0,0,0,0,0,0,0,0,0,0,0,102,102,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"moves":17,"order":[2393716,2393715],"setup":1,"options":{"houndExpansion":false,"specterExpansion":false},"players":{"2393715":{"pos":[8,5],"hand":[51,33,25,41,52],"color":1,"escaped":false,"inventory":[],"inSolitary":false,"placedTile":true,"shackleTile":16,"actionsPlayed":2},"2393716":{"pos":[8,6],"hand":[27,14,44,18],"color":0,"escaped":false,"inventory":[],"inSolitary":false,"placedTile":true,"shackleTile":0,"actionsPlayed":0}},"version":1,"drawPile":[38,10,40,35,42,37,53,4,15,45,21,12,47,49,20,31,17,11,39,29,22,54,28,30,34,5,6,9,56],"rollCall":[1,3,0,2,4],"nextPlayer":0,"openWindow":2,"whistlePos":2,"discardPile":[32,43,24,3,19,13],"finalTurns":null,"governorInventory":[55]}',
+            '{"move":10,"npcs":{
+                "warder1":{"pos":[8,6]},
+                "warder2":{"pos":[7,2]}
+            },
+            "board":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,36,0,0,0,0,0,0,0,0,0,0,0,23,0,36,0,0,0,0,0,0,0,0,0,0,0,23,0,48,0,0,0,0,0,0,0,0,0,126,126,150,150,48,1,0,0,0,0,0,0,0,0,0,0,0,146,146,1,0,0,0,0,0,0,0,0,0,0,0,102,102,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+            "moves":17,"order":[2393716,2393715],"setup":1,
+            "options":{"houndExpansion":false,"specterExpansion":false},
+            "players":{
+                "2393715":{"pos":[8,5],"hand":[51,33,25,41,52],"color":1,"escaped":false,"inventory":[],"inSolitary":false,"placedTile":true,"shackleTile":16,"actionsPlayed":2},
+                "2393716":{"pos":[8,6],"hand":[27,14,44,18],"color":0,"escaped":false,"inventory":[],"inSolitary":false,"placedTile":true,"shackleTile":0,"actionsPlayed":0}
+            },"version":1,"drawPile":[38,10,40,35,42,37,53,4,15,45,21,12,47,49,20,31,17,11,39,29,22,54,28,30,34,5,6,9,56],"rollCall":[1,3,0,2,4],"nextPlayer":0,"openWindow":2,"whistlePos":2,"discardPile":[32,43,24,3,19,13],"finalTurns":null,"governorInventory":[55]}',
             $mockEvents
         );
 
@@ -304,13 +314,16 @@ final class FledLogicTest extends TestCase
         $tileId = 44;
         $x = 8;
         $y = 5;
-        $p = 'blue';
-        $targetPlayerId = $fled->getPlayerIdByColorName('blue');
+        $p = 'blue'; // = 1
+        $targetPlayerId = $fled->getPlayerIdByColorName($p);
 
         $this->assertFalse($fled->isSafeForRollCall($x, $y), 'Target room should not be considered safe');
 
-        $mockEvents->expects($this->once())->method('onTilePlayedToMoveNpc')
-            ->with($playerId, $targetPlayerId, $tileId, $x, $y, 'warder1', [ [8,6], [8,5] ]);
+        $mockEvents->expects($this->once())->method('onTilePlayedToMoveNpcs')
+            ->with($playerId, $tileId, [ 'warder1' ]);
+
+        $mockEvents->expects($this->once())->method('onPlayerMovedNpc')
+            ->with($playerId, $targetPlayerId, $x, $y, 'warder1', [ [8,6], [8,5] ]);
 
         $mockEvents->expects($this->once())->method('onPlayerSentToSolitary')
             ->with($targetPlayerId);
@@ -320,7 +333,7 @@ final class FledLogicTest extends TestCase
         $mockEvents->expects($this->never())->method('onPlayerUnshackled');
 
 
-        $fled->discardTileToMoveNpc($tileId, $x, $y, 'warder1', $p);
+        $fled->discardTileToMoveNpcs($tileId, [ [ 'npc' => 'warder1', 'x' => $x, 'y' => $y, 'c' => $p ] ]);
 
         $this->assertTrue(true);
     }

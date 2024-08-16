@@ -9,6 +9,13 @@ define('FLED_PLAYER_BLUE', 1);
 define('FLED_PLAYER_ORANGE', 2);
 define('FLED_PLAYER_GREEN', 3);
 
+define('FLED_NPC_WARDER_1', 'warder1');
+define('FLED_NPC_WARDER_2', 'warder2');
+define('FLED_NPC_WARDER_3', 'warder3');
+define('FLED_NPC_CHAPLAIN', 'chaplain');
+define('FLED_NPC_HOUND', 'hound');
+define('FLED_NPC_SPECTER', 'specter');
+
 define('FLED_ROOM_YARD', 1);
 define('FLED_ROOM_CORRIDOR', 2);
 define('FLED_ROOM_BUNK', 3);
@@ -60,6 +67,7 @@ define('FLED_TILE_DOUBLE_WASHROOM', 36);
 define('FLED_TILE_DOUBLE_CORRIDOR', 41);
 define('FLED_TILE_START', 46);
 define('FLED_TILE_DOUBLE_MESSHALL', 51);
+define('FLED_TILE_SPECTER', 90);
 
 define('FLED_ORIENTATION_NORTH_SOUTH', 0); // Same orientation as the tile graphics
 define('FLED_ORIENTATION_WEST_EAST', 100);   // One rotation counter-clockwise
@@ -1169,7 +1177,7 @@ class FledLogic
             'expansion' => FLED_OPT_HOUND,
         ],
         // Specter Expansion
-        90 => [
+        FLED_TILE_SPECTER => [
             'color' => FLED_COLOR_GOLD,
             'contains' => FLED_TOOL_KEY,
             'rooms' => [
@@ -1187,15 +1195,6 @@ class FledLogic
         ],
     ];
 
-
-/*
-// Specter Expansion
-S1 - [ghost] double corridor: FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY, , FLED_EGRESS_ARCHWAY | , FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY, FLED_EGRESS_ARCHWAY / gold key
-S2 - ghost tile
-
-// Governor's Hound Expansion
-six tiles... TODO
-*/
 
     private function __construct($data, FledEvents $handlers = null)
     {
@@ -1299,14 +1298,14 @@ six tiles... TODO
         }
 
         $npcs = (object)[
-            'warder1' => [
+            FLED_NPC_WARDER_1 => [
                 'pos' => [ 6, 6 ],
             ],
             /* These get added as the game progresses
             'warder2' => null,
             'warder3' => null,
             'chaplain' => null,
-            'ghost' => null, // Specter Expansion
+            'specter' => null, // Specter Expansion
             */
         ];
 
@@ -1395,7 +1394,7 @@ six tiles... TODO
             case 82:
             case 84:
             case 85:
-            case 90: // Specter expansion
+            case FLED_TILE_SPECTER:
                 return true;
             default:
                 return false;
@@ -1683,6 +1682,17 @@ six tiles... TODO
             $this->eventHandlers->onNpcAdded($nextWarder, $this->data->npcs->$nextWarder);
             $this->data->openWindow--; // TODO: emit open window changed?
         }
+        else if ($tileId == FLED_TILE_SPECTER)
+        {
+            if (!$this->getOption('specterExpansion'))
+                throw new Exception('Not playing specter expansion');
+            if (isset($this->data->npcs->specter))
+                throw new Exception('Specter already exists');
+            $this->data->npcs->specter = (object)[
+                'pos' => [ $x, $y ],
+            ];
+            $this->eventHandlers->onNpcAdded('specter', $this->data->npcs->specter);
+        }
     }
 
     public function discardTileToMove($tileId, $x, $y)
@@ -1735,7 +1745,7 @@ six tiles... TODO
         $this->data->move++;
 
         $this->eventHandlers->onTilePlayedToMove($playerId, $tileId, $x, $y, $tool, $path);
-        $this->eventHandlers->onActionComplete($actionsPlayed);
+        $this->eventHandlers->onActionComplete($playerId, $actionsPlayed);
     }
 
     public function discardTilesToEscape($discards)
@@ -1811,17 +1821,56 @@ six tiles... TODO
         $color = array_search($colorName, FledLogic::$ColorNames, true);
         foreach ($this->data->players as $playerId => $player)
         {
-            if ($player->color == $color)
+            if ($player->color === $color)
                 return $playerId;
         }
         return null;
     }
 
-    public function discardTileToMoveNpc($tileId, $x, $y, $npcName, $targetPlayerColor)
+    public function discardTileToMoveNpcs($tileId, $moves)
     {
-        $targetPlayerId = $targetPlayerColor ? $this->getPlayerIdByColorName($targetPlayerColor) : null;
+        $playerId = $this->getNextPlayerId();
+
+        // Verify that the player holds this tile in hand
+        if (!$this->isTileInPlayersHand($tileId, $playerId))
+            throw new Exception('Invalid tile');
+
+        // Verify the player has actions remaining
+        $actionsPlayed = $this->data->players->$playerId->actionsPlayed;
+        if ($actionsPlayed >= 2)
+            throw new Exception('Too many actions');
+
+        // Remove the tile from the player's hand
+        // and put it in the discard pile
+        $this->removeTileFromHand($tileId, $playerId);
+        $this->addTileToDiscardPile($tileId);
+
+        $npcNames = array_values(array_map(fn($move) => $move['npc'], $moves));
+        $this->eventHandlers->onTilePlayedToMoveNpcs($playerId, $tileId, $npcNames);
+
+        foreach ($moves as $move)
+        {
+            $npcName = $move['npc'];
+            $x = $move['x'];
+            $y = $move['y'];
+            $targetPlayerColor = $move['c'];
+            $this->moveNpc($tileId, $npcName, $x, $y, $targetPlayerColor);
+        }
+
+        $this->data->players->$playerId->actionsPlayed = ++$actionsPlayed;
+        $this->data->move++;
+
+        $this->eventHandlers->onActionComplete($playerId, $actionsPlayed);
+    }
+    
+    function moveNpc($tileId, $npcName, $x, $y, $targetPlayerColor)
+    {
+        // TODO: validate tile type for the npc type that is moved
+
+        $targetPlayerId = $this->getPlayerIdByColorName($targetPlayerColor);
 
         $toBunk = false;
+        $frightened = false;
         $toSolitary = false;
         $targetIsSafe = false;
         $shackleTile = null;
@@ -1849,25 +1898,12 @@ six tiles... TODO
         if (!isset($this->data->npcs->$npcName))
             throw new Exception('No NPC named ' . $npcName);
 
-        // Verify that the player holds this tile in hand
-        if (!$this->isTileInPlayersHand($tileId, $playerId))
-            throw new Exception('Invalid tile');
-
-        // Verify the player has actions remaining
-        $actionsPlayed = $this->data->players->$playerId->actionsPlayed;
-        if ($actionsPlayed >= 2)
-            throw new Exception('Too many actions');
-
-        if ($npcName === 'hound' && !$this->getOption('houndExpansion'))
+        if ($npcName === FLED_NPC_HOUND && !$this->getOption('houndExpansion'))
             throw new Exception('Cannot move hound unless playing expansion');
 
-        if ($npcName === 'ghost' && !$this->getOption('specterExpansion'))
-            throw new Exception('Cannot move ghost unless playing expansion');
+        if ($npcName === FLED_NPC_SPECTER && !$this->getOption('specterExpansion'))
+            throw new Exception('Cannot move specter unless playing expansion');
 
-        // Remove the card from the player's hand
-        // and put it in the discard pile
-        $this->removeTileFromHand($tileId, $playerId);
-        $this->addTileToDiscardPile($tileId);
 
         // TODO: validate that the move is legal! For now we just assume it's legal
 
@@ -1881,7 +1917,7 @@ six tiles... TODO
 
         if ($targetPlayer)
         {
-            if ($npcName == 'chaplain')
+            if ($npcName == FLED_NPC_CHAPLAIN)
             {
                 // Free the player from their shackles (if they were shackled) -- unless they're in solitary
                 if (!$this->data->players->$targetPlayerId->inSolitary) {
@@ -1889,7 +1925,7 @@ six tiles... TODO
                     $this->data->players->$targetPlayerId->shackleTile = 0;
                 }
             }
-            else if (str_contains($npcName, 'warder'))
+            else if (FledLogic::isWarder($npcName))
             {
                 // Shackle a player if not in a safe room
                 $targetIsSafe = $this->isSafeForRollCall($x, $y);
@@ -1924,6 +1960,17 @@ six tiles... TODO
                     }
                 }
             }
+            else if ($npcName == FLED_NPC_SPECTER)
+            {
+                // If player is not in solitary then frighten player back to his bunk (do not remove shackles)
+                if (!$this->isPlayerInSolitary($targetPlayerId))
+                {
+                    $bunkTileId = $this->getStartingBunkTileId($targetPlayerId);
+                    $this->data->players->$targetPlayerId->pos = $this->getTilePosition($bunkTileId);
+                    $toBunk = true;
+                    $frightened = true;
+                }
+            }
         }
 
         // Move whistle left by one spot (there are five spots)
@@ -1931,13 +1978,10 @@ six tiles... TODO
         if (FledLogic::isWarder($npcName))
             $this->data->whistlePos = ($this->data->whistlePos + 4) % 5;
 
-        $this->data->players->$playerId->actionsPlayed = ++$actionsPlayed;
-        $this->data->move++;
-
-        $this->eventHandlers->onTilePlayedToMoveNpc($playerId, $targetPlayerId, $tileId, $x, $y, $npcName, $path);
+        $this->eventHandlers->onPlayerMovedNpc($playerId, $targetPlayerId, $x, $y, $npcName, $path);
 
         if ($toBunk)
-            $this->eventHandlers->onPlayerSentToBunk($targetPlayerId);
+            $this->eventHandlers->onPlayerSentToBunk($targetPlayerId, $frightened);
 
         if ($shackleTile)
             $this->eventHandlers->onPlayerShackled($playerId, $targetPlayerId, $shackleTile, $this->getPlayerScore($targetPlayerId), $this->getPlayerAuxScore($targetPlayerId));
@@ -1956,8 +2000,6 @@ six tiles... TODO
 
         if (FledLogic::isWarder($npcName))
             $this->eventHandlers->onWhistleMoved($playerId, $this->getSafeRollCallRooms());
-
-        $this->eventHandlers->onActionComplete($actionsPlayed);
     }
 
     public function releasePlayerFromSolitary($playerId)
@@ -1975,7 +2017,7 @@ six tiles... TODO
         $this->data->governorInventory[] = $unshackleTile;
 
         $this->eventHandlers->onMissedTurn($playerId);
-        $this->eventHandlers->onPlayerSentToBunk($playerId);
+        $this->eventHandlers->onPlayerSentToBunk($playerId, false);
         $this->eventHandlers->onPlayerUnshackled($playerId, $unshackleTile, $this->getPlayerScore($playerId), $this->getPlayerAuxScore($playerId));
     }
 
@@ -2015,7 +2057,7 @@ six tiles... TODO
         $auxScore = $this->getPlayerAuxScore($playerId);
         $this->eventHandlers->onTileAddedToInventory($playerId, $tileId, $discards, $score, $auxScore);
 
-        $this->eventHandlers->onActionComplete($actionsPlayed);
+        $this->eventHandlers->onActionComplete($playerId, $actionsPlayed);
     }
 
     public function surrenderTile($tileId)
@@ -2041,7 +2083,7 @@ six tiles... TODO
         $this->data->move++;
 
         $this->eventHandlers->onTileSurrendered($playerId, $tileId);
-        $this->eventHandlers->onActionComplete($actionsPlayed);
+        $this->eventHandlers->onActionComplete($playerId, $actionsPlayed);
     }
 
     public function drawTiles($governorTileId)

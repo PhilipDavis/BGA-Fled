@@ -93,3 +93,24 @@ $this->RoomTypeLabels = [
         'plural' => clienttranslate('Forests'),
     ],
 ];
+
+$this->NpcTypes = [
+    FLED_NPC_WARDER_1 => [
+        'the' => clienttranslate('Warder #1'),
+    ],
+    FLED_NPC_WARDER_2 => [
+        'the' => clienttranslate('Warder #2'),
+    ],
+    FLED_NPC_WARDER_3 => [
+        'the' => clienttranslate('Warder #3'),
+    ],
+    FLED_NPC_CHAPLAIN => [
+        'the' => clienttranslate('the Chaplain'),
+    ],
+    FLED_NPC_HOUND => [
+        'the' => clienttranslate('the Hound'),
+    ],
+    FLED_NPC_SPECTER => [
+        'the' => clienttranslate('the Specter'),
+    ],
+];

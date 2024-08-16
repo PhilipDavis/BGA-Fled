@@ -25,7 +25,7 @@ class Fled extends Table implements FledEvents
         self::initGameStateLabels([
             // Game Options
             FLED_OPT_HOUND => FLED_OPT_HOUND,
-            //"specterExpansion" => 101,
+            FLED_OPT_SPECTER => FLED_OPT_SPECTER,
         ]);
 
         $this->fled = null;
@@ -115,7 +115,7 @@ class Fled extends Table implements FledEvents
  
 
         $fledOptions = [
-            'specterExpansion' => false, // TODO
+            'specterExpansion' => $this->getGameStateValue(FLED_OPT_SPECTER) == FLED_OPT_SPECTER_YES,
             'houndExpansion' => $this->getGameStateValue(FLED_OPT_HOUND) == FLED_OPT_HOUND_YES,
         ];
         
@@ -376,9 +376,10 @@ class Fled extends Table implements FledEvents
     {
         // Strings for the replay log
         $npcDisplayLabel = [
-            'warder2' => clienttranslate('A new Warder'),
-            'warder3' => clienttranslate('A new Warder'),
-            'chaplain' => clienttranslate('The Chaplain'),
+            'warder2' => clienttranslate('a new Warder'),
+            'warder3' => clienttranslate('a new Warder'),
+            'chaplain' => clienttranslate('the Chaplain'),
+            'specter' => clienttranslate('the Specter'),
         ];
 
         $this->notifyAllPlayers('npcAdded', clienttranslate('${_npc} has been added to the prison at (${x}, ${y})'), [
@@ -482,7 +483,7 @@ class Fled extends Table implements FledEvents
         ]);
     }
 
-    function action_moveNpc($tileId, $x, $y, $w, $p)
+    function action_moveNpcs($tileId, $moves)
     {
         $playerId = $this->validateCaller();
 
@@ -490,7 +491,7 @@ class Fled extends Table implements FledEvents
         $stateBefore = $fled->toJson();
         try
         {
-            $fled->discardTileToMoveNpc($tileId, $x, $y, $w, $p);
+            $fled->discardTileToMoveNpcs($tileId, $moves);
         }
         catch (Throwable $e)
         {
@@ -503,12 +504,9 @@ class Fled extends Table implements FledEvents
                 '    );',
                 '    $playerId = ' . $playerId . ';',
                 '    $tileId = ' . $tileId . ';',
-                '    $x = ' . $x . ';',
-                '    $y = ' . $y . ';',
-                '    $w = "' . $w . '";',
-                '    $p = "' . $p . '";',
+                '    $moves = json_decode("' . json_encode($moves) . '");',
                 '',
-                '    $fled->discardTileToMoveNpc($tileId, $x, $y, $w, $p);',
+                '    $fled->discardTileToMoveNpcs($tileId, $moves);',
                 '',
                 '    $this->assertTrue(true);',
                 '}',
@@ -521,51 +519,84 @@ class Fled extends Table implements FledEvents
         $this->saveGameState($fled);
     }
 
-    function onPlayerSentToBunk($playerId)
+    function onPlayerSentToBunk($playerId, $wasFrightened)
     {
-        $this->incStat(1, 'confiscations');
+        if (!$wasFrightened)
+            $this->incStat(1, 'confiscations');
 
-        $this->notifyAllPlayers('playerSentToBunk', clienttranslate('${playerName} is sent back to bunk'), [
+        $msg =
+            $wasFrightened
+                ? clienttranslate('${playerName} is frightened back to bunk')
+                : clienttranslate('${playerName} is sent back to bunk')
+        ;
+
+        $this->notifyAllPlayers('playerSentToBunk', $msg, [
             'playerName' => $this->getPlayerNameById($playerId),
             'playerId' => $playerId,
             'preserve' => [ 'playerId' ],
         ]);
     }
 
-    function onTilePlayedToMoveNpc($activePlayerId, $targetPlayerId, $tileId, $x, $y, $npcName, $path)
+    function onTilePlayedToMoveNpcs($activePlayerId, $tileId, $npcNames)
+    {
+        if (count($npcNames) < 1 || count($npcNames) > 2)
+            throw new Exception('Unexpected number of NPCs: ' . json_encode($npcNames));
+
+        $tile = FledLogic::$FledTiles[$tileId];
+        $itemId = $tile['contains'];
+        $this->notifyAllPlayers('tilePlayedToMoveNpcs', clienttranslate('${playerName} plays ${_tile} to move ${npcs}'), [
+            'i18n' => [ '_tile' ],
+            'npcs' => [
+                'log' =>
+                    count($npcNames) == 1
+                        ? '${npc1}'
+                        : clienttranslate('${npc1} and ${npc2}'), // Array has either 1 or 2 names
+                'args' => [
+                    'npc1' => $this->NpcTypes[$npcNames[0]]['the'],
+                    'npc2' => count($npcNames) > 1 ? $this->NpcTypes[$npcNames[1]]['the'] : '',
+                ],
+            ],
+            '_tile' => $this->Items[$itemId]['one'],
+            'playerName' => $this->getPlayerNameById($activePlayerId),
+            'playerId' => $activePlayerId,
+            'tile' => $tileId,
+            'preserve' => [ 'playerId', 'tile' ],
+        ]);
+    }
+
+    function onPlayerMovedNpc($activePlayerId, $targetPlayerId, $x, $y, $npcName, $path)
     {
         //
         // Update stats
         //
         $distance = count($path) - 1;
-        if (FledLogic::isWarder($npcName))
+        if ($npcName == FLED_NPC_CHAPLAIN)
+            $this->incStat($distance, 'chaplain_distance');
+        else if (FledLogic::isWarder($npcName))
             $this->incStat($distance, 'warder_distance');
+        else if ($npcName == FLED_NPC_HOUND)
+            $this->incStat($distance, 'hound_distance');
+        else if ($npcName == FLED_NPC_SPECTER)
+            $this->incStat($distance, 'specter_distance');
 
         //
         // Notify Players
         //
         $msg =
             $targetPlayerId
-                ? clienttranslate('${playerName} plays ${_tile} to move ${_npc} to ${targetName} at (${x}, ${y})')
-                : clienttranslate('${playerName} plays ${_tile} to move ${_npc} to (${x}, ${y})');
+                ? clienttranslate('${playerName} moves ${_npc} to ${targetName} at (${x}, ${y})')
+                : clienttranslate('${playerName} moves ${_npc} to (${x}, ${y})');
 
-        $tile = FledLogic::$FledTiles[$tileId];
-        $itemId = $tile['contains'];
-        $this->notifyAllPlayers('tilePlayedToMoveNpc', $msg, [
-            'i18n' => [ '_tile', '_npc' ],
-            '_tile' => $this->Items[$itemId]['one'],
-            '_npc' =>
-                $npcName == 'chaplain'
-                    ? _('the chaplain')
-                    : _('a warder'),
+        $this->notifyAllPlayers('playerMovedNpc', $msg, [
+            'i18n' => [ '_npc' ],
+            '_npc' => $this->NpcTypes[$npcName]['the'],
             'playerName' => $this->getPlayerNameById($activePlayerId),
             'targetName' => $targetPlayerId ? $this->getPlayerNameById($targetPlayerId) : null,
             'playerId' => $activePlayerId,
-            'tile' => $tileId,
             'npc' => $npcName,
             'x' => $x,
             'y' => $y,
-            'preserve' => [ 'playerId', 'tile', 'npc' ],
+            'preserve' => [ 'playerId', 'npc' ],
         ]);
     }
 
@@ -773,8 +804,13 @@ class Fled extends Table implements FledEvents
         ]);
     }
 
-    function onActionComplete(int $actionsPlayed)
+    function onActionComplete($playerId, int $actionsPlayed)
     {
+        $this->notifyPlayer($playerId, 'actionComplete', '', [
+            'n' => $actionsPlayed,
+            'preserve' => [ 'n' ],
+        ]);
+
         if ($actionsPlayed == 2)
             $this->gamestate->nextState('nextPhase');
     }
