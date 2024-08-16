@@ -3300,6 +3300,9 @@ function (dojo, declare,
                     easing: 'ease-out',
                     fill: 'forwards',
                 }).finished;
+
+                // Recreate the tooltip because the rotation may have changed
+                this.createTileTooltip(tileId, deg);
             }
             else {
                 this.makeTilesNonSelectable();
