@@ -51,7 +51,7 @@
             "type": "int"
         },
         "escaped": {
-            "id": 22,
+            "id": 99,
             "name": "Players escaped the prison",
             "type": "int"
         }
@@ -112,11 +112,6 @@
             "name": "Double tools used",
             "type": "int"
         },
-        "escaped": {
-            "id": 21,
-            "name": "Escaped the prison",
-            "type": "int"
-        },
         "traversed_window": {
             "id": 23,
             "name": "Windows traversed",
@@ -150,6 +145,11 @@
         "items_from_governor": {
             "id": 29,
             "name": "Items taken from the Governor's Inventory",
+            "type": "int"
+        },
+        "escaped": {
+            "id": 99,
+            "name": "Escaped the prison",
             "type": "int"
         }
     }
