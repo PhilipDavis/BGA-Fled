@@ -3290,7 +3290,16 @@ function (dojo, declare,
                 const yy = bestMove[2];
                 const tileDiv = this.getTileDiv(tileId);
                 const { xEm, yEm, deg } = calculateTilePosition(xx, yy, orientation);
-                tileDiv.style.transform = `translate(${xEm}em, ${yEm}em) rotateZ(${deg}deg)`;
+
+                this.createRotateButton(x, y, bestMatchingMoves.length);
+
+                await tileDiv.animate({
+                    transform: [ `translate(${xEm}em, ${yEm}em) rotateZ(${deg}deg)` ],
+                }, {
+                    duration: 400,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
             }
             else {
                 this.makeTilesNonSelectable();
@@ -3299,9 +3308,8 @@ function (dojo, declare,
                 const tileDiv = this.getTileDiv(tileId);
                 tileDiv.classList.add('fled_tentative');
                 this.deselectAllTiles();
+                this.createRotateButton(x, y, bestMatchingMoves.length);
             }
-
-            this.createRotateButton(x, y, bestMatchingMoves.length);
 
             this.clientStateArgs.movesAtSelectedCoords = bestMatchingMoves;
             this.clientStateArgs.movesIndex = 0;
@@ -3321,6 +3329,10 @@ function (dojo, declare,
                 movesIndex,
             } = this.clientStateArgs;
             
+            const currentMove = movesAtSelectedCoords[movesIndex];
+            const [ , xxCur, yyCur, oCur ] = currentMove;
+            const curPos = calculateTilePosition(xxCur, yyCur, oCur);
+
             movesIndex = (movesIndex + 1) % movesAtSelectedCoords.length;
             this.clientStateArgs.movesIndex = movesIndex;
             
@@ -3329,7 +3341,33 @@ function (dojo, declare,
             const [ tileId, xx, yy, orientation ] = nextMove;
             const tileDiv = this.getTileDiv(tileId);
             const { xEm, yEm, deg } = calculateTilePosition(xx, yy, orientation);
-            await this.animateTransitionAsync(tileDiv, style => style.transform = `translate(${xEm}em, ${yEm}em) rotateZ(${deg}deg)`);
+
+            if (Math.abs(deg - curPos.deg) > 180) {
+                // Adjust the rotation so that we take the shorter rotation angle
+                // (i.e. rotate -90 degrees instead of 270)
+                await tileDiv.animate({
+                    transform: [
+                        `translate(${curPos.xEm}em, ${curPos.yEm}em) rotateZ(${(curPos.deg + 360) % 360}deg)`,
+                        `translate(${xEm}em, ${yEm}em) rotateZ(${(deg + 360) % 360}deg)`,
+                    ],
+                }, {
+                    duration: 400,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
+            }
+            else {
+                await tileDiv.animate({
+                    transform: [
+                        `translate(${curPos.xEm}em, ${curPos.yEm}em) rotateZ(${curPos.deg}deg)`,
+                        `translate(${xEm}em, ${yEm}em) rotateZ(${deg}deg)`
+                    ],
+                }, {
+                    duration: 400,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
+            }
 
             // Recreate the tooltip because the rotation changed
             this.createTileTooltip(tileId, deg);
