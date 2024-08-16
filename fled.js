@@ -595,7 +595,9 @@ function (dojo, declare,
         createRoomTooltip(tileId, index, deg) {
             const tileDiv = this.getTileDiv(tileId);
             const divId = `fled_room-${tileId}-${index}`;
-            tileDiv.insertAdjacentHTML('beforeend', `<div id="${divId}" class="fled_room fled_room-${index}"></div>`);
+            if (!tileDiv.querySelector(`#${divId}`)) {
+                tileDiv.insertAdjacentHTML('beforeend', `<div id="${divId}" class="fled_room fled_room-${index}"></div>`);
+            }
             const html = this.format_block('fled_Templates.roomTooltip', {
                 TILE_ID: tileId,
                 ROOM: index,
