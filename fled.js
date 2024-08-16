@@ -714,7 +714,7 @@ function (dojo, declare,
             buttonDiv.style.left = `${xEm + emTileWidth / 2}rem`;
             buttonDiv.style.top = `${yEm + emTileHeight / 2}rem`;
             buttonDiv.classList.remove('fled_no-transition');
-            this.reflow();
+            this.reflow(buttonDiv);
             buttonDiv.classList.remove('fled_hidden');
 
             if (moveCount > 1) {
@@ -2476,6 +2476,9 @@ function (dojo, declare,
 
         async animateTileFromHandToGovernorInventoryAsync(tileId) {
             const tileDiv = this.getTileDiv(tileId);
+            if (!tileDiv) {
+                return;
+            }
 
             const handSlots = Array.from(tileDiv.parentElement.children);
             const handSlotIndex = handSlots.findIndex(div => div === tileDiv);
@@ -2912,8 +2915,8 @@ function (dojo, declare,
             container.style.height = '32em';
             this.reflow(container);
             await this.animateSmartZoomAsync({ force: true, noExpand: true });
-            this.showHideMiniMap();
             this.clientStateArgs.boardContainerExpanded = false;
+            this.showHideMiniMap();
             document.getElementById('fled_board-button-expand').classList.remove('fled_hidden');
         },
 
