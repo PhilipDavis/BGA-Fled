@@ -91,7 +91,6 @@ class Fled extends Table implements FledEvents
         $this->initStat('table', 'items_from_governor', 0);
         $this->initStat('table', 'items_from_chaplain', 0);
         $this->initStat('table', 'escaped', 0);
-        $this->initStat('table', 'hard_labour', 0);
 
         $this->initStat('player', 'added_to_prison', 0);
         $this->initStat('player', 'whistles_blown', 0);
@@ -1072,10 +1071,7 @@ class Fled extends Table implements FledEvents
         $fled = $this->fled; // Loaded earlier
 
         if ($fled->wasHardLaborCalled())
-        {
-            $this->setStat(1, 'hard_labour');
             $this->notifyAllPlayers('hardLabor', clienttranslate('<b>The Governor summons everyone to hard labour in the quarry!</b>'), []);
-        }
 
         if ($fled->getGameProgression() >= 100)
         {

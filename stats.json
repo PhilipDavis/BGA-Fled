@@ -54,11 +54,6 @@
             "id": 22,
             "name": "Players escaped the prison",
             "type": "int"
-        },
-        "hard_labour": {
-            "id": 23,
-            "name": "Hard labour was called",
-            "type": "int"
         }
     },
     "player": {
