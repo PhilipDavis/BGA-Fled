@@ -2005,9 +2005,10 @@ define([], () => {
                         if (validRooms.indexOf(currentRoomType) >= 0) {
                             if (Tiles[tileId].contains == contraband && contraband != Empty) {
                                 eligibleTileIds.push(tileId);
+                                continue;
                             }
                         }
-                        else if (this.data.options.houndExpansion)
+                        if (this.data.options.houndExpansion)
                         {
                             const [ x, y ] = this.data.npcs.hound.pos;
                             const houndContraband = ContrabandFromRoom[this.getRoomAt(x, y).type];

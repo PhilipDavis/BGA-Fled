@@ -2705,9 +2705,12 @@ class FledLogic
                 foreach ($player->hand as $tileId)
                 {
                     if (FledLogic::$FledTiles[$tileId]['contains'] == $contraband && $contraband !== FLED_EMPTY)
+                    {
                         $eligibleTileIds[] = $tileId;
+                        continue;
+                    }
 
-                    else if ($this->getOption('houndExpansion'))
+                    if ($this->getOption('houndExpansion'))
                     {
                         $houndPos = $this->data->npcs->hound->pos;
                         $houndRoomType = $this->getRoomTypeAt($houndPos[0], $houndPos[1]);
