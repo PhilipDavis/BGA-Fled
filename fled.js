@@ -3040,9 +3040,17 @@ function (dojo, declare,
                             });
                         }
                         else {
-                            this.setClientState('client_selectWarderToMove', {
-                                descriptionmyturn: _('${you} must select a warder to move'),
-                            });
+                            if (fled.warderCount === 1) {
+                                this.clientStateArgs.selectedNpc = 'warder1';
+                                this.setClientState('client_selectWarderDestination', {
+                                    descriptionmyturn: _('${you} must select a destination for the warder'),
+                                });
+                            }
+                            else {
+                                this.setClientState('client_selectWarderToMove', {
+                                    descriptionmyturn: _('${you} must select a warder to move'),
+                                });
+                            }
                         }
                     }
                     else if (isShamrockTile(tileId)) {
