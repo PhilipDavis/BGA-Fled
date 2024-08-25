@@ -11,10 +11,16 @@
                 "tmdisplay": "Unlike his master, the hound was a kind soul, eager to please. The canine’s penchant for fetching contraband did not go unnoticed by the prisoners, who often rewarded him with a tasty bone."
             }
         },
+        "displaycondition": [
+            {
+                "type": "minplayers",
+                "value": [ 2, 3, 4 ]
+            }
+        ],
         "default": 1
     },
     "101": {
-        "name": "Expansion: The Specter",
+        "name": "Expansion: The Specter (Multiplayer Mode)",
         "values": {
             "1": {
                 "name": "no",
@@ -25,6 +31,12 @@
                 "tmdisplay": "The haunted corridors of Spike Island prison are no place to roam at night. But brave them you must, lest You remain in captivity -- forever!"
             }
         },
+        "displaycondition": [
+            {
+                "type": "minplayers",
+                "value": [ 2, 3, 4 ]
+            }
+        ],
         "default": 1
     }
 }
