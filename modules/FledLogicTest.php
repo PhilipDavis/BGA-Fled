@@ -323,7 +323,7 @@ final class FledLogicTest extends TestCase
             ->with($playerId, $tileId, [ 'warder1' ]);
 
         $mockEvents->expects($this->once())->method('onPlayerMovedNpc')
-            ->with($playerId, $targetPlayerId, $x, $y, 'warder1', [ [8,6], [8,5] ]);
+            ->with($playerId, $targetPlayerId, $x, $y, 'warder1', [ [8,6], [8,5] ], null);
 
         $mockEvents->expects($this->once())->method('onPlayerSentToSolitary')
             ->with($targetPlayerId);
@@ -333,7 +333,7 @@ final class FledLogicTest extends TestCase
         $mockEvents->expects($this->never())->method('onPlayerUnshackled');
 
 
-        $fled->discardTileToMoveNpcs($tileId, [ [ 'npc' => 'warder1', 'x' => $x, 'y' => $y, 'c' => $p ] ]);
+        $fled->discardTileToMoveNpcs($tileId, [ 'npc' => 'warder1', 'x' => $x, 'y' => $y, 'c' => $p ]);
 
         $this->assertTrue(true);
     }

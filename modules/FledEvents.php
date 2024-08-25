@@ -9,7 +9,7 @@ interface FledEvents
     function onTilePlaced($playerId, $tileId, $x, $y, $orientation);
     function onTilePlayedToMove($playerId, $tileId, $x, $y, $tool, $path);
     function onTilePlayedToMoveNpcs($activePlayerId, $tileId, $npcNames);
-    function onPlayerMovedNpc($activePlayerId, $targetPlayerId, $x, $y, $npcName, $path);
+    function onPlayerMovedNpc($activePlayerId, $targetPlayerId, $x, $y, $npcName, $path, $needMove2);
     function onPlayerShackled($activePlayerId, $targetPlayerId, $shackleTile, $score, $auxScore);
     function onPlayerUnshackled($playerId, $unshackleTile, $score, $auxScore);
     function onPlayerSentToBunk($playerId, $wasFrightened);

@@ -9,6 +9,7 @@ define('FLED_PLAYER_BLUE', 1);
 define('FLED_PLAYER_ORANGE', 2);
 define('FLED_PLAYER_GREEN', 3);
 
+define('FLED_NPC_WARDER_n', 'warder'); // Used to represent any warder rather than a specific warder
 define('FLED_NPC_WARDER_1', 'warder1');
 define('FLED_NPC_WARDER_2', 'warder2');
 define('FLED_NPC_WARDER_3', 'warder3');
@@ -1294,6 +1295,12 @@ class FledLogic
                 'placedTile' => false,
                 'actionsPlayed' => 0,
                 'escaped' => false,
+
+                // In Specter expansion, needMove2 will be set after the first NPC move
+                // and we're expecting that the player will send their second NPC move next.
+                // This hack is needed because we need to know not to end the game action
+                // until both moves are received.
+                'needMove2' => null,
             ];
         }
 
@@ -1367,7 +1374,7 @@ class FledLogic
 
     public static function isWarder($npcName)
     {
-        return $npcName === 'chaplain' || strstr($npcName, 'warder') !== false;
+        return $npcName === FLED_NPC_CHAPLAIN || strstr($npcName, FLED_NPC_WARDER_n) !== false;
     }
 
     public static function roomHasTunnel($room)
@@ -1827,46 +1834,117 @@ class FledLogic
         return null;
     }
 
-    public function discardTileToMoveNpcs($tileId, $moves)
+    public function discardTileToMoveNpcs($tileId, $move)
     {
         $playerId = $this->getNextPlayerId();
+        $player = $this->data->players->$playerId;
+
+        // Verify the player has actions remaining
+        $player = $this->data->players->$playerId;
+        $actionsPlayed = $player->actionsPlayed;
+        if ($actionsPlayed >= 2)
+            throw new Exception('Too many actions');
+
+        if ($this->getOption('specterExpansion') && $player->needMove2)
+            $this->discardTileToMoveNpcs_move2($move);
+        else
+            $this->discardTileToMoveNpcs_move1($tileId, $move);
+
+        $this->data->move++;
+
+        // If we're playing Specter expansion and the player moved either the Specter
+        // or a warder, we need the player to send us their second movement before we
+        // can finish the current game action.
+        if (isset($this->data->players->$playerId->needMove2))
+            return;
+
+        $this->data->players->$playerId->actionsPlayed = ++$actionsPlayed;
+        $this->eventHandlers->onActionComplete($playerId, $actionsPlayed);
+    }
+
+    public function discardTileToMoveNpcs_move1($tileId, $move1)
+    {
+        $playerId = $this->getNextPlayerId();
+        $player = $this->data->players->$playerId;
 
         // Verify that the player holds this tile in hand
         if (!$this->isTileInPlayersHand($tileId, $playerId))
             throw new Exception('Invalid tile');
 
-        // Verify the player has actions remaining
-        $actionsPlayed = $this->data->players->$playerId->actionsPlayed;
-        if ($actionsPlayed >= 2)
-            throw new Exception('Too many actions');
+        // Don't allow a discard if we're still waiting on a second move of the previous action
+        if (isset($player->needMove2))
+            throw new Exception('Move action already in progress');
 
         // Remove the tile from the player's hand
         // and put it in the discard pile
         $this->removeTileFromHand($tileId, $playerId);
         $this->addTileToDiscardPile($tileId);
 
-        $npcNames = array_values(array_map(fn($move) => $move['npc'], $moves));
-        $this->eventHandlers->onTilePlayedToMoveNpcs($playerId, $tileId, $npcNames);
-
-        foreach ($moves as $move)
+        // Determine which NPC is being moved first, and fill in the blanks
+        // for the second NPC (which hasn't happened yet) when we're playing
+        // the Specter expansion and the specter is on the board.
+        $needMove2 = null;
+        $npcNames = [ $move1['npc'] ];
+        if ($this->getOption('specterExpansion') && $this->isSpecterInPlay())
         {
-            $npcName = $move['npc'];
-            $x = $move['x'];
-            $y = $move['y'];
-            $targetPlayerColor = $move['c'];
-            $this->moveNpc($tileId, $npcName, $x, $y, $targetPlayerColor);
+            if ($this->isWarder($move1['npc']))
+            {
+                $npcNames[] = FLED_NPC_SPECTER;
+                $needMove2 = FLED_NPC_SPECTER;
+            }
+            else if ($move1['npc'] == FLED_NPC_SPECTER)
+            {
+                $npcNames[] = FLED_NPC_WARDER_n;
+                $needMove2 = FLED_NPC_WARDER_n;
+            }
         }
+        $this->eventHandlers->onTilePlayedToMoveNpcs($playerId, $tileId, $npcNames);
+        $this->data->players->$playerId->needMove2 = $needMove2;
 
-        $this->data->players->$playerId->actionsPlayed = ++$actionsPlayed;
-        $this->data->move++;
+        // TODO: validate the tile type is appropriate to move the NPC
 
-        $this->eventHandlers->onActionComplete($playerId, $actionsPlayed);
+        $npcName = $move1['npc'];
+        $x = $move1['x'];
+        $y = $move1['y'];
+        $targetPlayerColor = $move1['c'];
+        $this->moveNpc($npcName, $x, $y, $targetPlayerColor);
+    }
+
+    public function discardTileToMoveNpcs_move2($move2)
+    {
+        $playerId = $this->getNextPlayerId();
+        $player = $this->data->players->$playerId;
+
+        // Don't allow a discard if we're still waiting on a second move of the previous action
+        if (!isset($player->needMove2))
+            throw new Exception('First move not received');
+
+        if (!$this->isSpecterInPlay())
+            throw new Exception('Specter is not in play');
+
+        if (
+            ($player->needMove2 == FLED_NPC_WARDER_n && !$this->isWarder($move2['npc'])) ||
+            ($player->needMove2 == FLED_NPC_SPECTER  && $move2['npc'] != FLED_NPC_SPECTER)
+        )
+            throw new Exception('Unexpected NPC for second move');
+
+        $npcName = $move2['npc'];
+        $x = $move2['x'];
+        $y = $move2['y'];
+        $targetPlayerColor = $move2['c'];
+        $this->moveNpc($npcName, $x, $y, $targetPlayerColor);
+
+        // We are no longer waiting for a second move
+        $this->data->players->$playerId->needMove2 = null;
     }
     
-    function moveNpc($tileId, $npcName, $x, $y, $targetPlayerColor)
+    function isSpecterInPlay()
     {
-        // TODO: validate tile type for the npc type that is moved
+        return isset($this->data->npcs->specter);
+    }
 
+    function moveNpc($npcName, $x, $y, $targetPlayerColor)
+    {
         $targetPlayerId = $this->getPlayerIdByColorName($targetPlayerColor);
 
         $toBunk = false;
@@ -1978,7 +2056,8 @@ class FledLogic
         if (FledLogic::isWarder($npcName))
             $this->data->whistlePos = ($this->data->whistlePos + 4) % 5;
 
-        $this->eventHandlers->onPlayerMovedNpc($playerId, $targetPlayerId, $x, $y, $npcName, $path);
+        $needMove2 = $this->data->players->$playerId->needMove2;
+        $this->eventHandlers->onPlayerMovedNpc($playerId, $targetPlayerId, $x, $y, $npcName, $path, $needMove2);
 
         if ($toBunk)
             $this->eventHandlers->onPlayerSentToBunk($targetPlayerId, $frightened);

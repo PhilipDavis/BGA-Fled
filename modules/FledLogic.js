@@ -2368,6 +2368,7 @@ define([], () => {
 
         actionComplete() {
             this.data.players[this.myPlayerId].actionsPlayed++;
+            this.data.players[this.myPlayerId].needMove2 = null;
         }
 
         get isLastTurn() {
@@ -2440,6 +2441,16 @@ define([], () => {
 
         get governorInventory() {
             return this.data.governorInventory;
+        }
+
+        get needMove2() {
+            const player = this.data.players[this.myPlayerId];
+            return player.needMove2;
+        }
+
+        set needMove2(npcName) {
+            const player = this.data.players[this.myPlayerId];
+            player.needMove2 = npcName;
         }
 
         get moveNumber() {

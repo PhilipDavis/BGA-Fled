@@ -327,6 +327,10 @@ function (dojo, declare,
                 });
                 this.addTooltipHtmlToClass(`fled_prisoner-tile-zone-${i}`, html, ToolTipDelay);
             }
+
+            if (fled.needMove2) {
+                this.setClientStateForSecondMove();
+            }
         },
 
 
@@ -1086,15 +1090,21 @@ function (dojo, declare,
 
                 case 'client_selectWarderOrSpecterToMove':
                 case 'client_selectWarderToMove':
-                    this.addActionButton(`fled_button-cancel-warder-movement`, _('Cancel'), () => this.onClickCancelMove(), null, false, 'red');
+                    if (!fled.needMove2) {
+                        this.addActionButton(`fled_button-cancel-warder-movement`, _('Cancel'), () => this.onClickCancelMove(), null, false, 'red');
+                    }
                     break;
                     
                 case 'client_selectWarderDestination':
-                    this.addActionButton(`fled_button-cancel-warder-movement2`, _('Cancel'), () => this.onClickCancelMove(), null, false, 'red');
+                    if (!fled.needMove2) {
+                        this.addActionButton(`fled_button-cancel-warder-movement2`, _('Cancel'), () => this.onClickCancelMove(), null, false, 'red');
+                    }
                     break;
 
                 case 'client_selectSpecterDestination':
-                    this.addActionButton(`fled_button-cancel-specter-movement`, _('Cancel'), () => this.onClickCancelMove(), null, false, 'red');
+                    if (!fled.needMove2) {
+                        this.addActionButton(`fled_button-cancel-specter-movement`, _('Cancel'), () => this.onClickCancelMove(), null, false, 'red');
+                    }
                     break;
 
                 case 'client_selectPlayerToTarget':
@@ -3449,7 +3459,6 @@ function (dojo, declare,
 
         async onClickMoveButton() {
             if (!this.isCurrentPlayerActive()) return;
-            if (this.last_server_state.name !== 'playTiles') return;
             console.log('onClickMoveButton()');
 
             const { tilesForMovement } = this.clientStateArgs;
@@ -3498,36 +3507,12 @@ function (dojo, declare,
             delete this.clientStateArgs.selectedNpc;
             delete this.clientStateArgs.selectedPlayer;
 
-            if (fled.getOption('specterExpansion') && fled.isSpecterInPlay && this.clientStateArgs.npcMoves.length < 2) {
-                // Player still has to move either the specter or a warder
-                if (this.currentState === 'client_selectWarderDestination') {
-                    this.clientStateArgs.selectedNpc = 'specter';
-                    this.setClientState('client_selectSpecterDestination', {
-                        descriptionmyturn: _('${you} must also select a destination for the specter'),
-                    });
-                }
-                else {
-                    if (fled.warderCount === 1) {
-                        this.clientStateArgs.selectedNpc = 'warder1';
-                        this.setClientState('client_selectWarderDestination', {
-                            descriptionmyturn: _('${you} must also select a destination for the warder'),
-                        });
-                    }
-                    else {
-                        this.setClientState('client_selectWarderToMove', {
-                            descriptionmyturn: _('${you} must also select a warder to move'),
-                        });
-                    }
-                }
-            }
-            else {
-                this.askConfirmationOrInvoke({
-                    state: 'client_confirmNpcMovement',
-                    prompt: _('${you} must confirm the movement'),
-                    pref: Preference.ConfirmWhenMovingNpc,
-                    bypass: this.onClickConfirmNpcMovement,
-                });
-            }
+            this.askConfirmationOrInvoke({
+                state: 'client_confirmNpcMovement',
+                prompt: _('${you} must confirm the movement'),
+                pref: Preference.ConfirmWhenMovingNpc,
+                bypass: this.onClickConfirmNpcMovement,
+            });
         },
 
         async onClickConfirmNpcMovement() {
@@ -3543,7 +3528,7 @@ function (dojo, declare,
             const t = this.clientStateArgs.selectedTileId;
             const moves = this.clientStateArgs.npcMoves?.flat().join('_');
 
-            await invokeServerActionAsync('moveNpcs', fled.moveNumber, { t, moves });
+            await invokeServerActionAsync('moveNpc', fled.moveNumber, { t, moves });
             // TODO: lock the UI while the above call is happening
 
             delete this.clientStateArgs.selectedTileId;
@@ -3566,7 +3551,6 @@ function (dojo, declare,
 
         async onClickAddToInventoryButton() {
             if (!this.isCurrentPlayerActive()) return;
-            if (this.last_server_state.name !== 'playTiles') return;
             console.log('onClickAddToInventoryButton()');
 
             const { tilesForInventory } = this.clientStateArgs;
@@ -3579,7 +3563,6 @@ function (dojo, declare,
 
         async onClickConfirmAddToInventory() {
             if (!this.isCurrentPlayerActive()) return;
-            if (this.last_server_state.name !== 'playTiles') return;
             console.log('onClickConfirmAddToInventory()');
 
             this.makeTilesNonSelectable();
@@ -3609,7 +3592,6 @@ function (dojo, declare,
 
         async onClickSurrenderButton() {
             if (!this.isCurrentPlayerActive()) return;
-            if (this.last_server_state.name !== 'playTiles') return;
             console.log('onClickSurrenderButton()');
 
             this.makeTilesSelectable(fled.myHand);
@@ -3744,6 +3726,31 @@ function (dojo, declare,
             else {
                 this.setClientState(state, {
                     descriptionmyturn: prompt,
+                });
+            }
+        },
+
+        setClientStateForSecondMove() {
+            this.clientStateArgs.selectedTileId = 0;
+            const needMove2 = fled.needMove2;
+            if (fled.isWarder(needMove2)) {
+                if (fled.warderCount === 1) {
+                    this.clientStateArgs.selectedNpc = 'warder1';
+                    this.setClientState('client_selectWarderDestination', {
+                        descriptionmyturn: _('${you} must also select a destination for the warder'),
+                    });
+                }
+                else {
+                    this.setClientState('client_selectWarderToMove', {
+                        descriptionmyturn: _('${you} must also select a warder to move'),
+                    });
+                    this.makeWardersSelectable();
+                }
+            }
+            else if (needMove2 == 'specter') {
+                this.clientStateArgs.selectedNpc = 'specter';
+                this.setClientState('client_selectSpecterDestination', {
+                    descriptionmyturn: _('${you} must also select a destination for the specter'),
                 });
             }
         },
@@ -3913,13 +3920,18 @@ function (dojo, declare,
             await this.animateDiscardHandTileAsync(tileId);
         },
 
-        async notify_playerMovedNpc({ playerId, x, y, npc: npcName }) {
+        async notify_playerMovedNpc({ playerId, x, y, npc: npcName, needMove2 }) {
             fled.moveNpc(playerId, npcName, x, y);
 
             this.makeMeeplesNonSelectable();
             this.deselectAll();
 
             await this.animateNpcMoveAsync(npcName, x, y);
+
+            if (needMove2 && this.myPlayerId == playerId && !this.g_archive_mode) {
+                fled.needMove2 = needMove2;
+                this.setClientStateForSecondMove();
+            }
         },
 
         async notify_missedTurn({ playerId }) {

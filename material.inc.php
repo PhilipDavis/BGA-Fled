@@ -95,6 +95,9 @@ $this->RoomTypeLabels = [
 ];
 
 $this->NpcTypes = [
+    FLED_NPC_WARDER_n => [
+        'the' => clienttranslate('a Warder'),
+    ],
     FLED_NPC_WARDER_1 => [
         'the' => clienttranslate('Warder #1'),
     ],

@@ -85,14 +85,15 @@ class action_fled extends APP_GameAction
         $this->ajaxResponse();
     }
 
-    public function moveNpcs()
+    public function moveNpc()
     {
         $this->setAjaxMode();
         
         // TODO: moveNumber (in all actions)
         $tileId = intval($this->getArg('t', AT_posint, true));
         $moves = $this->getMoveNpcsFromArgList($this->getArg('moves', AT_alphanum, true, ''));
-        $this->game->action_moveNpcs($tileId, $moves);
+        $move = array_shift($moves);
+        $this->game->action_moveNpc($tileId, $move);
 
         $this->ajaxResponse();
     }

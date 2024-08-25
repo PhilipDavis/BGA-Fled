@@ -482,7 +482,7 @@ class Fled extends Table implements FledEvents
         ]);
     }
 
-    function action_moveNpcs($tileId, $moves)
+    function action_moveNpc($tileId, $move)
     {
         $playerId = $this->validateCaller();
 
@@ -490,7 +490,7 @@ class Fled extends Table implements FledEvents
         $stateBefore = $fled->toJson();
         try
         {
-            $fled->discardTileToMoveNpcs($tileId, $moves);
+            $fled->discardTileToMoveNpcs($tileId, $move);
         }
         catch (Throwable $e)
         {
@@ -503,9 +503,9 @@ class Fled extends Table implements FledEvents
                 '    );',
                 '    $playerId = ' . $playerId . ';',
                 '    $tileId = ' . $tileId . ';',
-                '    $moves = json_decode("' . json_encode($moves) . '");',
+                '    $move = json_decode("' . json_encode($move) . '");',
                 '',
-                '    $fled->discardTileToMoveNpcs($tileId, $moves);',
+                '    $fled->discardTileToMoveNpcs($tileId, $move);',
                 '',
                 '    $this->assertTrue(true);',
                 '}',
@@ -563,7 +563,7 @@ class Fled extends Table implements FledEvents
         ]);
     }
 
-    function onPlayerMovedNpc($activePlayerId, $targetPlayerId, $x, $y, $npcName, $path)
+    function onPlayerMovedNpc($activePlayerId, $targetPlayerId, $x, $y, $npcName, $path, $needMove2)
     {
         //
         // Update stats
@@ -595,7 +595,8 @@ class Fled extends Table implements FledEvents
             'npc' => $npcName,
             'x' => $x,
             'y' => $y,
-            'preserve' => [ 'playerId', 'npc' ],
+            'needMove2' => $needMove2,
+            'preserve' => [ 'playerId', 'npc', 'needMove2' ],
         ]);
     }
 

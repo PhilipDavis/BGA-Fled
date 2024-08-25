@@ -92,7 +92,7 @@ $machinestates = [
         'type' => 'activeplayer',
         'possibleactions' => [
             'move',
-            'moveNpcs',
+            'moveNpc',
             'add',
             'surrender',
             'escape',
