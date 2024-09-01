@@ -1845,7 +1845,7 @@ class FledLogic
         if ($actionsPlayed >= 2)
             throw new Exception('Too many actions');
 
-        if ($this->getOption('specterExpansion') && $player->needMove2)
+        if ($this->getOption('specterExpansion') && isset($player->needMove2))
             $this->discardTileToMoveNpcs_move2($move);
         else
             $this->discardTileToMoveNpcs_move1($tileId, $move);
@@ -1922,10 +1922,10 @@ class FledLogic
         if (!$this->isSpecterInPlay())
             throw new Exception('Specter is not in play');
 
-        if (
+        if (isset($player->needMove2) && (
             ($player->needMove2 == FLED_NPC_WARDER_n && !$this->isWarder($move2['npc'])) ||
             ($player->needMove2 == FLED_NPC_SPECTER  && $move2['npc'] != FLED_NPC_SPECTER)
-        )
+        ))
             throw new Exception('Unexpected NPC for second move');
 
         $npcName = $move2['npc'];
@@ -2056,7 +2056,7 @@ class FledLogic
         if (FledLogic::isWarder($npcName))
             $this->data->whistlePos = ($this->data->whistlePos + 4) % 5;
 
-        $needMove2 = $this->data->players->$playerId->needMove2;
+        $needMove2 = isset($this->data->players->$playerId->needMove2) ? $this->data->players->$playerId->needMove2 : null;
         $this->eventHandlers->onPlayerMovedNpc($playerId, $targetPlayerId, $x, $y, $npcName, $path, $needMove2);
 
         if ($toBunk)
