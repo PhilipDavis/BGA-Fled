@@ -1389,8 +1389,11 @@ function (dojo, declare,
         },
 
         makeSelfSelectable() {
-            const name = MeepleNames[fled.players[this.myPlayerId].color];
-            this.makeMeeplesSelectable([ name ]);
+            const { color, inSolitary } = fled.players[this.myPlayerId];
+            if (!inSolitary) {
+                const name = MeepleNames[color];
+                this.makeMeeplesSelectable([ name ]);
+            }
         },
 
         makeWardersSelectable() {
