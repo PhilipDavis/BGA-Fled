@@ -312,7 +312,7 @@ class Fled extends Table implements FledEvents
                 'playerId' => $activePlayerId,
                 'tile' => $tileId,
                 'gov' => $toGovernor,
-                'preserve' => [ 'playerId', 'tile', 'gov' ],
+                'preserve' => [ 'tile' ],
             ]);
             return;
         }
@@ -328,7 +328,7 @@ class Fled extends Table implements FledEvents
                     'playerName' => $this->getPlayerNameById($playerId),
                     'playerId' => $activePlayerId,
                     'tile' => $tileId,
-                    'preserve' => [ 'playerId', 'tile' ],
+                    'preserve' => [ 'tile' ],
                 ]);
             }
             else
@@ -336,7 +336,6 @@ class Fled extends Table implements FledEvents
                 $this->notifyPlayer($playerId, 'tileDiscarded', clienttranslate('${playerName} discards a tile'), [
                     'playerName' => $this->getPlayerNameById($playerId),
                     'playerId' => $activePlayerId,
-                    'preserve' => [ 'playerId' ],
                 ]);
             }
         }
@@ -409,7 +408,6 @@ class Fled extends Table implements FledEvents
             'x' => $x,
             'y' => $y,
             'o' => $orientation,
-            'preserve' => [ 'playerId', 'x', 'y', 'o', 'tile' ],
         ]);
     }
 
@@ -417,7 +415,6 @@ class Fled extends Table implements FledEvents
     {
         $this->notifyAllPlayers('setupComplete', clienttranslate('<b>WHISTLE!</b> All prisoners go to their bunk room'), [
             'players' => $playerPositions,
-            'preserve' => [ 'players' ],
         ]);
     }
 
@@ -478,7 +475,7 @@ class Fled extends Table implements FledEvents
             'tile' => $tileId,
             'x' => $x,
             'y' => $y,
-            'preserve' => [ 'playerId', 'tile' ],
+            'preserve' => [ 'tile' ],
         ]);
     }
 
@@ -532,7 +529,6 @@ class Fled extends Table implements FledEvents
         $this->notifyAllPlayers('playerSentToBunk', $msg, [
             'playerName' => $this->getPlayerNameById($playerId),
             'playerId' => $playerId,
-            'preserve' => [ 'playerId' ],
         ]);
     }
 
@@ -559,7 +555,7 @@ class Fled extends Table implements FledEvents
             'playerName' => $this->getPlayerNameById($activePlayerId),
             'playerId' => $activePlayerId,
             'tile' => $tileId,
-            'preserve' => [ 'playerId', 'tile' ],
+            'preserve' => [ 'tile' ],
         ]);
     }
 
@@ -596,7 +592,7 @@ class Fled extends Table implements FledEvents
             'x' => $x,
             'y' => $y,
             'needMove2' => $needMove2,
-            'preserve' => [ 'playerId', 'npc', 'needMove2' ],
+            'preserve' => [ 'npc' ],
         ]);
     }
 
@@ -617,7 +613,6 @@ class Fled extends Table implements FledEvents
                     'playerId' => $targetPlayerId,
                     'tileId' => $shackleTile,
                     'score' => $score,
-                    'preserve' => [ 'playerId', 'tileId', 'score' ],
                 ]);
             }
             else
@@ -626,7 +621,6 @@ class Fled extends Table implements FledEvents
                     'playerName' => $this->getPlayerNameById($targetPlayerId),
                     'playerId' => $targetPlayerId,
                     'score' => $score,
-                    'preserve' => [ 'playerId', 'score' ],
                 ]);
             }
         }
@@ -646,7 +640,7 @@ class Fled extends Table implements FledEvents
             '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
             'tile' => $unshackleTile,
             'score' => $score,
-            'preserve' => [ 'playerId', 'tile', 'score' ],
+            'preserve' => [ 'tile' ],
         ]);
     }
 
@@ -657,7 +651,6 @@ class Fled extends Table implements FledEvents
         $this->notifyAllPlayers('playerSentToSolitary', clienttranslate('${playerName} is sent to <b>solitary confinement</b>'), [
             'playerName' => $this->getPlayerNameById($playerId),
             'playerId' => $playerId,
-            'preserve' => [ 'playerId' ],
         ]);
     }
 
@@ -687,7 +680,7 @@ class Fled extends Table implements FledEvents
                 'room0' => $safeRoomTypes[0],
                 'room1' => $safeRoomTypes[1],
                 'playerId' => $playerId,
-                'preserve' => [ 'room0', 'room1', 'playerId' ],
+                'preserve' => [ 'room0', 'room1' ],
             ]);
         }
         else
@@ -697,7 +690,7 @@ class Fled extends Table implements FledEvents
                 '_room' => $this->RoomTypeLabels[$safeRoomTypes[0]]['plural'],
                 'room' => $safeRoomTypes[0],
                 'playerId' => $playerId,
-                'preserve' => [ 'room', 'playerId' ],
+                'preserve' => [ 'room' ],
             ]);
         }
     }
@@ -751,7 +744,7 @@ class Fled extends Table implements FledEvents
             '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
             'tile' => $tileId,
             'score' => $score,
-            'preserve' => [ 'playerId', 'tileId', 'score' ],
+            'preserve' => [ 'tile' ],
         ]);
     }
 
@@ -800,7 +793,7 @@ class Fled extends Table implements FledEvents
             'playerName' => $this->getPlayerNameById($activePlayerId),
             'playerId' => $activePlayerId,
             'tile' => $tileId,
-            'preserve' => [ 'playerId', 'tile' ],
+            'preserve' => [ 'tile' ],
         ]);
     }
 
@@ -808,7 +801,6 @@ class Fled extends Table implements FledEvents
     {
         $this->notifyPlayer($playerId, 'actionComplete', '', [
             'n' => $actionsPlayed,
-            'preserve' => [ 'n' ],
         ]);
 
         if ($actionsPlayed == 2)
@@ -820,7 +812,6 @@ class Fled extends Table implements FledEvents
         $this->notifyAllPlayers('missedTurn', clienttranslate('${playerName} <b>misses a turn</b> in solitary confinement'), [
             'playerName' => $this->getPlayerNameById($playerId),
             'playerId' => $playerId,
-            'preserve' => [ 'playerId' ],
         ]);
     }
 
@@ -870,7 +861,6 @@ class Fled extends Table implements FledEvents
             'playerName' => $this->getPlayerNameById($playerId),
             'playerId' => $playerId,
             'score' => $score,
-            'preserve' => [ 'playerId', 'score' ],
         ]);
 
         // Skip the draw phase and immediately go to the next player.
@@ -925,7 +915,7 @@ class Fled extends Table implements FledEvents
             'playerName' => $this->getPlayerNameById($playerId),
             'playerId' => $playerId,
             'tile' => $tileId,
-            'preserve' => [ 'playerId', 'tileId' ],
+            'preserve' => [ 'tile' ],
         ]);
     }
 
@@ -942,12 +932,10 @@ class Fled extends Table implements FledEvents
                 'playerName' => $this->getPlayerNameById($activePlayerId),
                 'playerId' => $activePlayerId,
                 'n' => count($drawnBeforeShuffle),
-                'preserve' => [ 'n', 'playerId' ],
             ]);
 
             $this->notifyPlayer($activePlayerId, 'tilesReceived', '', [
                 'tileIds' => $drawnBeforeShuffle,
-                'preserve' => [ 'tileIds' ],
             ]);
         }
 
@@ -969,12 +957,10 @@ class Fled extends Table implements FledEvents
                 'playerName' => $this->getPlayerNameById($activePlayerId),
                 'playerId' => $activePlayerId,
                 'n' => count($drawnAfterShuffle),
-                'preserve' => [ 'playerId', 'n' ],
             ]);
 
             $this->notifyPlayer($activePlayerId, 'tilesReceived', '', [
                 'tileIds' => $drawnAfterShuffle,
-                'preserve' => [ 'tileIds' ],
             ]);
         }
     }
@@ -1045,7 +1031,6 @@ class Fled extends Table implements FledEvents
                 'playerId' => $playerId,
                 'tileIds' => $discards,
                 'score' => $score,
-                'preserve' => [ 'playerId', 'tileIds', 'score' ],
             ]);
         }
     }
