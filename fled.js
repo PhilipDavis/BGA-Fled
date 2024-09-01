@@ -257,6 +257,14 @@ function (dojo, declare,
                 ]);
             }
 
+            createFromTemplate('fled_Templates.piles', {
+                DRAW: _('Draw Pile'),
+                DISCARD: _('Discard Pile'),
+            }, 'fled_surface', { placement: 'afterbegin' });
+
+            this.updateDrawPile();
+            this.updateDiscardPile();
+
             document.getElementById('fled_board-button-collapse')?.addEventListener('click', () => this.onClickCollapseMap());
             document.getElementById('fled_board-button-expand')?.addEventListener('click', () => this.onClickExpandMap());            
 
@@ -337,6 +345,57 @@ function (dojo, declare,
         ///////////////////////////////////////////////////
         //// UI Helpers
 
+        calculatePileHeight(nTiles) {
+            if (nTiles > 45) return 15;
+            if (nTiles > 40) return 14;
+            if (nTiles > 35) return 13;
+            if (nTiles > 30) return 12;
+            if (nTiles > 25) return 11;
+            if (nTiles > 20) return 10;
+            if (nTiles > 15) return 9;
+            if (nTiles > 10) return 8;
+            if (nTiles > 7) return 7;
+            if (nTiles > 5) return 6;
+            if (nTiles > 4) return 5;
+            if (nTiles > 3) return 4;
+            if (nTiles > 2) return 3;
+            if (nTiles > 1) return 2;
+            if (nTiles > 0) return 1;
+            return 0;
+        },
+
+        updateDrawPile() {
+            this.updatePile('fled_draw-pile', fled.data.drawPile);
+        },
+        
+        updateDiscardPile() {
+            this.updatePile('fled_discard-pile', fled.data.discardPile);
+        },
+        
+        updatePile(pileDivId, n) {
+            const desiredPileSize = this.calculatePileHeight(n);
+            const deckDiv = document.getElementById(pileDivId);
+            let actualPileSize = deckDiv.childElementCount - 2;
+            while (actualPileSize < desiredPileSize) {
+                createFromTemplate('fled_Templates.tile', {
+                    DIV_ID: `${pileDivId}-${actualPileSize}`,
+                    CLASS: 'fled_back',
+                    X_EM: 5,
+                    Y_EM: -5,
+                    DEG: 90,
+                    Y_DEG: 180,
+                }, deckDiv, { placement: 'afterbegin' });
+                actualPileSize++;
+            }
+            while (actualPileSize > desiredPileSize) {
+                deckDiv.removeChild(deckDiv.firstElementChild);
+                actualPileSize--;
+            }
+
+            const countDiv = document.getElementById(`${pileDivId}-count`);
+            countDiv.dataset.count = n;
+        },
+
         createRollCallTile(rollCallTileIndex, isOpen) {
             const divId = `fled_tile-rc-${rollCallTileIndex}`;
             dojo.place(this.format_block('fled_Templates.rollCallTile', {
@@ -356,6 +415,19 @@ function (dojo, declare,
             return div;
         },
 
+        createTileOnDrawPile(tileId) {
+            const divId = `fled_tile-${tileId}`;
+            createFromTemplate('fled_Templates.tile', {
+                DIV_ID: divId,
+                CLASS: `${divId} fled_back`,
+                X_EM: 5,
+                Y_EM: -5,
+                DEG: 90,
+                Y_DEG: 180,
+            }, 'fled_draw-pile', { placement: 'beforeend' });
+            return document.getElementById(divId);
+        },
+
         createTileInGovernorInventory(tileId, isHidden = false) {
             const divId = `fled_tile-${tileId}`;
             const className = `${divId} ${isHidden ? 'fled_hidden' : ''}`;
@@ -365,6 +437,7 @@ function (dojo, declare,
                 X_EM: 0,
                 Y_EM: 0,
                 DEG: 0,
+                Y_DEG: 0,
             }), 'fled_governors-area');
 
             this.adjustGovernorsInventoryMargin();
@@ -382,6 +455,7 @@ function (dojo, declare,
                 X_EM: 0,
                 Y_EM: 0,
                 DEG: 0,
+                Y_DEG: 180,
             }), `player_board_${playerId}`);
             const tileDiv = document.getElementById(divId);
             tileDiv.addEventListener('click', () => this.onClickSelectableTile(tileId));
@@ -454,6 +528,7 @@ function (dojo, declare,
                 X_EM: xEm,
                 Y_EM: yEm,
                 DEG: deg,
+                Y_DEG: 0,
             }), 'fled_board');
             const tileDiv = document.getElementById(divId);
             tileDiv.addEventListener('click', () => this.onClickBoardTile(tileId));
@@ -484,6 +559,7 @@ function (dojo, declare,
                 X_EM: xEm,
                 Y_EM: yEm,
                 DEG: deg,
+                Y_DEG: 0,
             }), 'fled_minimap');
         },
 
@@ -571,6 +647,7 @@ function (dojo, declare,
                 X_EM: x,
                 Y_EM: y,
                 DEG: deg,
+                Y_DEG: 0,
             }), `fled_player-${this.myPlayerId}-hand`);
             const tileDiv = document.getElementById(divId);
             tileDiv.addEventListener('click', () => this.onClickSelectableTile(tileId));
@@ -623,6 +700,7 @@ function (dojo, declare,
                 X_EM: 0,
                 Y_EM: 0,
                 DEG: 0,
+                Y_DEG: 0,
             }), `fled_shackle-slot-${playerId}`);
             const div = document.getElementById(divId);
             div.addEventListener('click', () => this.onClickSelectableTile(tileId));
@@ -636,6 +714,7 @@ function (dojo, declare,
                 X_EM: 0,
                 Y_EM: 0,
                 DEG: 0,
+                Y_DEG: 0,
             }), `fled_inventory-${playerId}-slot-${slotIndex}`);
             const div = document.getElementById(divId);
             div.addEventListener('click', () => this.onClickSelectableTile(tileId));
@@ -2144,7 +2223,7 @@ function (dojo, declare,
 
             await Promise.all([
                 this.animateHandToMakeRoomForNewTileAsync(),
-                this.animateTileFromPlayerBoardToMyHandAsync(tileId),
+                this.animateTileFromDrawPileToMyHandAsync(tileId),
             ]);
         },
 
@@ -2228,6 +2307,67 @@ function (dojo, declare,
             srcDiv.parentElement.removeChild(srcDiv);
         },
 
+        async animateTileFromDrawPileToMyHandAsync(tileId) {
+            this.updateDrawPile();
+
+            const srcDiv = this.createTileOnDrawPile(tileId);
+            srcDiv.id = `fled_temp-tile-${tileId}`;
+
+            const handDiv = document.getElementById(`fled_player-${this.myPlayerId}-hand`);
+            const handSlots = Array.from(handDiv.children);
+            const handSlotIndex = handSlots.length;
+            const { deg } = PlayerHandSlots[handSlots.length + 1][handSlotIndex];
+
+            const tileDiv = this.createTileInHand(handSlotIndex, handSlots.length + 1, tileId, true);
+
+            const srcRect = srcDiv.getBoundingClientRect();
+            const destRect = tileDiv.getBoundingClientRect();
+
+            const deltaX = Math.round((destRect.x + destRect.width / 2) - (srcRect.x + srcRect.width / 2));
+            const deltaY = Math.round((destRect.y + destRect.height / 2) - (srcRect.y + srcRect.height / 2));
+
+            // Drop the Governor's Area z-index so that the tiles appear
+            // to fly over it rather than under it. (don't want to change
+            // the z-index of the tile itself because it needs to slide
+            // between two tiles in the player's hand)
+            const goverorsAreaDiv = document.getElementById('fled_governors-area');
+            goverorsAreaDiv.style.zIndex = -1;
+            const boardContainerDiv = document.getElementById('fled_board-container');
+            boardContainerDiv.style.zIndex = -1;
+            
+            if (!this.instantaneousMode) {
+                // Flip the tile over
+                await srcDiv.animate({
+                    transform: [
+                        `translate(5em, -5em) rotateZ(90deg) rotateY(0deg)`,
+                    ],
+                }, {
+                    duration: 400,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
+
+                // Send it to player's hand
+                await srcDiv.animate({
+                    transform: [
+                        `translate(5em, -5em) rotateZ(90deg) rotateY(0deg)`,
+                        `translate(calc(5em + ${deltaX}px), calc(-5em + ${deltaY}px)) rotateZ(${deg}deg)`,
+                    ],
+                }, {
+                    delay: 100,
+                    duration: 800,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
+            }
+            
+            tileDiv.classList.remove('fled_hidden');
+            srcDiv.parentElement.removeChild(srcDiv);
+
+            goverorsAreaDiv.style.zIndex = 1;
+            boardContainerDiv.style.zIndex = 0;
+        },
+
         async animateDiscardHandTileAsync(tileId) {
             const tileDiv = this.getTileDiv(tileId);
             if (!tileDiv) return;
@@ -2236,18 +2376,24 @@ function (dojo, declare,
             const handSlotIndex = handSlots.findIndex(div => div === tileDiv);
             const { x, y } = PlayerHandSlots[handSlots.length][handSlotIndex];
 
-            // There currently is no discard pile... just animate up and fade out
+            // There was no discard pile when this was first written.
+            // But rather than change this code, will just create a
+            // new tile on the discard pile.
 
-            await tileDiv.animate({
-                opacity: [ 0 ],
-                transform: [ `translate(${x}em, ${y - 10}em) rotateZ(0deg)` ],
-            }, {
-                duration: ShortDuration,
-                easing: 'ease-out',
-                fill: 'forwards',
-            }).finished;
+            if (!this.instantaneousMode) {
+                await tileDiv.animate({
+                    opacity: [ 0 ],
+                    transform: [ `translate(${x}em, ${y - 10}em) rotateZ(0deg)` ],
+                }, {
+                    duration: ShortDuration,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
+            }
 
             tileDiv.parentElement.removeChild(tileDiv);
+
+            this.updateDiscardPile();
 
             await this.animateCloseGapInHandAsync();
         },
@@ -2256,7 +2402,9 @@ function (dojo, declare,
             const tileDiv = this.getTileDiv(tileId);
             if (!tileDiv) return;
 
-            // There currently is no discard pile... just animate up and fade out
+            // There was no discard pile when this was first written.
+            // But rather than change this code, will just create a
+            // new tile on the discard pile.
 
             if (!this.instantaneousMode) {
                 await tileDiv.animate({
@@ -2270,6 +2418,8 @@ function (dojo, declare,
             }
 
             tileDiv.parentElement.removeChild(tileDiv);
+
+            this.updateDiscardPile();
         },
 
         async animateTileFromBoardBackToHandAsync() {
@@ -3892,8 +4042,10 @@ function (dojo, declare,
         async notify_tilesDrawn({ playerId, n }) {
             if (playerId != this.myPlayerId) {
                 for (let i = 0; i < n; i++) {
+                    fled.removeFromDrawPile();
                     fled.addTileToHand(playerId, 0);
                 }
+                this.updateDrawPile();
             }
         },
 
@@ -3907,13 +4059,17 @@ function (dojo, declare,
         },
 
         async notify_shuffled({ n }) {
-            fled.shuffle();
+            fled.shuffle(n);
+            this.updateDiscardPile();
+            this.updateDrawPile();
         },
 
         async notify_tilePlayedToMove({ playerId, tile: tileId, x, y }) {
             fled.movePlayer(playerId, tileId, x, y);
 
             await this.animateDiscardHandTileAsync(tileId);
+
+            this.updateDiscardPile();
 
             // TODO: animate the entire path
             await this.animatePlayerMoveAsync(playerId, x, y);
@@ -3926,6 +4082,9 @@ function (dojo, declare,
             this.deselectAll();
 
             await this.animateDiscardHandTileAsync(tileId);
+
+            fled.addTileToDiscardPile();
+            this.updateDiscardPile();
         },
 
         async notify_playerMovedNpc({ playerId, x, y, npc: npcName, needMove2 }) {

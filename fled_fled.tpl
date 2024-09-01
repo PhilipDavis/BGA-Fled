@@ -31,6 +31,22 @@
 <script type="text/javascript">
 
 const fled_Templates = {
+    piles:
+        '<div id="fled_piles">' +
+            '<div id="fled_draw-pile" class="fled_pile">' +
+                '<div id="fled_draw-pile-count" class="fled_pile-count"></div>' +
+                '<label>' +
+                    '${DRAW}' +
+                '</label>' +
+            '</div>' +
+            '<div id="fled_discard-pile" class="fled_pile">' +
+                '<div id="fled_discard-pile-count" class="fled_pile-count"></div>' +
+                '<label>' +
+                    '${DISCARD}' +
+                '</label>' +
+            '</div>' +
+        '</div>',
+
     miniMap:
         '<div id="fled_minimap">' +
             '<div id="fled_minimap-focus"></div>' +
@@ -62,7 +78,7 @@ const fled_Templates = {
         '<div ' +
             'id="${DIV_ID}" ' +
             'class="fled_tile ${CLASS}" ' +
-            'style="transform: translate(${X_EM}em, ${Y_EM}em) rotateZ(${DEG}deg)" ' +
+            'style="transform: translate(${X_EM}em, ${Y_EM}em) rotateZ(${DEG}deg) rotateY(${Y_DEG}deg)" ' +
         '>' +
             '<div class="fled_tile-face-front"></div>' +
             '<div class="fled_tile-face-back"></div>' +

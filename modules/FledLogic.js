@@ -1476,8 +1476,8 @@ define([], () => {
             this.data.drawPile--;
         }
 
-        shuffle() {
-            this.data.drawPile += this.data.discardPile;
+        shuffle(n) {
+            this.data.drawPile = n;
             this.data.discardPile = 0;
         }
 
@@ -1497,6 +1497,10 @@ define([], () => {
 
         removeTileFromGovernorInventory(tileId) {
             this.data.governorInventory = this.data.governorInventory.filter(t => t != tileId);
+        }
+
+        removeFromDrawPile() {
+            this.data.drawPile--;
         }
 
         addTileToDiscardPile() {
