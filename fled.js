@@ -232,7 +232,7 @@ function (dojo, declare,
                 'refZone-1': _('A *shoe* lets you move your pawn from one room to the next through *two* adjacent archways. A single archway connected to a door or window would require a key or file, respectively.'),
                 'refZone-2': _('A *file* lets you move your pawn from one room to the next through a window, or windows, connecting them'),
                 'refZone-3': _('A *spoon* lets you move your pawn from one room with a tunnel to any other room with a tunnel up to three (six if doubled) orthogonal rooms away.'),
-                'refZone-4': _('A *shamrock* is a good-luck charm and gives you special privileges! First, it is “*wild*” and may count as any singleuse tool.'),
+                'refZone-4': _('A *shamrock* is a good-luck charm and gives you special privileges! First, it is “*wild*” and may count as any single-use tool.'),
                 'refZone-5': _('A tool on a *purple scroll* costs 1 contraband item'),
                 'refZone-6': _('A tool on a *gold scroll* doubles the symbol’s effect.'),
                 'refZone-7': _('A *shamrock* or a tool on a *gold scroll* costs 2 contraband items.'),
@@ -963,7 +963,7 @@ function (dojo, declare,
                     break;
 
                 case 'client_selectPlayerToTarget': {
-                    const { x, y } =this.clientStateArgs.selectedCoords;
+                    const { x, y } = this.clientStateArgs.selectedCoords;
                     const playersInRoom = fled.getPlayersAt(x, y);
                     this.makeMeeplesSelectable(playersInRoom);
                     break;
