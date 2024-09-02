@@ -1455,6 +1455,7 @@ define([], () => {
         }
 
         isTileInPlayersHand(tileId) {
+            if (!this.isPlayer(this.myPlayerId)) return false;
             return this.data.players[this.myPlayerId].hand.indexOf(tileId) >= 0;
         }
 
@@ -1677,6 +1678,7 @@ define([], () => {
 
         getInventoryTilesEligibleForEscape() {
             const player = this.data.players[this.myPlayerId];
+            if (!player) return [];
             const [ x, y ] = player.pos;
             if (x != 1 && x != FledWidth - 2 && y != 1 && y != FledHeight - 2) {
                 return false;
@@ -1700,7 +1702,7 @@ define([], () => {
             const eligibleTileIds = [];
 
             const player = this.data.players[this.myPlayerId];
-            if (!player.pos) return [];
+            if (!player?.pos) return [];
             const [ x, y ] = player.pos;
             const toolsNeeded = this.calculateToolsNeededToLeaveRoom(x, y);
 
@@ -1775,6 +1777,8 @@ define([], () => {
         }
 
         getLegalMovementMoves(tileId) {
+            if (!this.isPlayer(this.myPlayerId)) return;
+
             const tile = Tiles[tileId];
             let distance = 0;
             switch (tile.color) {
@@ -1987,7 +1991,7 @@ define([], () => {
             const player = this.data.players[this.myPlayerId];
 
             // Cannot add any tiles while in solitary confinement
-            if (player.inSolitary) return [];
+            if (player?.inSolitary) return [];
 
             const hasShamrock = this.playerHasShamrockInInventory(this.myPlayerId);
 
@@ -2079,6 +2083,7 @@ define([], () => {
 
         getLegalTileMoves() {
             const player = this.data.players[this.myPlayerId];
+            if (!player) return [];
             const legalMoves = [];
 
             const availableCells = this.findEmptyCellsAdjacentToTiles();
@@ -2116,6 +2121,7 @@ define([], () => {
         // every possible placement of the starting bunk tiles automatically follows the
         // egress matching rules.
         getLegalStartingTileMoves() {
+            if (!this.isPlayer(this.myPlayerId)) return;
             const tileId = this.getStartingBunkTileId(this.myPlayerId);
 
             // Starting tile is at (6, 6)... there are six adjacent cells.
@@ -2197,6 +2203,7 @@ define([], () => {
         }
 
         canEscape() {
+            if (!this.isPlayer(this.myPlayerId)) return false;
             const player = this.data.players[this.myPlayerId];    
             return this.canEscapeWith(player.inventory);
         }
@@ -2261,7 +2268,10 @@ define([], () => {
         }
 
         resetActionsPlayed() {
-            this.data.players[this.myPlayerId].actionsPlayed = 0;
+            const player = this.data.players[this.myPlayerId];
+            if (player) {
+                player.actionsPlayed = 0;
+            }
         }
 
         getBoard() {
@@ -2371,6 +2381,7 @@ define([], () => {
         }
 
         actionComplete() {
+            if (!this.isPlayer(this.myPlayerId)) return;
             this.data.players[this.myPlayerId].actionsPlayed++;
             this.data.players[this.myPlayerId].needMove2 = null;
         }
@@ -2392,10 +2403,12 @@ define([], () => {
         }
 
         get myHand() {
+            if (!this.isPlayer(this.myPlayerId)) return [];
             return this.data.players[this.myPlayerId].hand;
         }
 
         get myInventory() {
+            if (!this.isPlayer(this.myPlayerId)) return [];
             return this.data.players[this.myPlayerId].inventory;
         }
 
