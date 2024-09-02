@@ -1669,7 +1669,7 @@ define([], () => {
         }
 
         isPlayer(playerId) {
-            return Object.keys(this.data.players).indexOf(playerId) >= 0;
+            return this.data.order.some(id => id == playerId);
         }
 
         getOption(optionName) {
