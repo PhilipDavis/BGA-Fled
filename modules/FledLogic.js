@@ -2449,7 +2449,7 @@ define([], () => {
 
         get needMove2() {
             const player = this.data.players[this.myPlayerId];
-            return player.needMove2;
+            return player?.needMove2 || null;
         }
 
         set needMove2(npcName) {
