@@ -65,6 +65,8 @@
     justify-content: space-evenly;
     align-items: flex-end;
     margin-bottom: 1em;
+    position: relative;
+    z-index: 2;
 }
 
 .fled_pile {
@@ -1059,11 +1061,13 @@
     border-radius: .25em;
     transition: transform .8s ease-out, top .2s ease-out;
 }
-.fled_player-hand-tiles .fled_tile:not(.fled_hidden) {
+.fled_player-hand-tiles .fled_tile:not(.fled_hidden),
+#fled_solo-hand .fled_tile:not(.fled_hidden) {
     box-shadow: 0.1em 0.1em 0.25em rgba(0, 0, 0, .4);
 }
 
-.fled_player-hand-tiles .fled_tile.fled_selectable::after {
+.fled_player-hand-tiles .fled_tile.fled_selectable::after,
+#fled_solo-hand .fled_tile.fled_selectable::after {
     position: absolute;
     display: block;
     content: ' ';
@@ -1074,20 +1078,25 @@
     border: dashed .2em rgba(32, 32, 32, .8);
     border-radius: .5em;
 }
-.fled_player-hand-tiles .fled_tile.fled_selectable:hover::after {
+.fled_player-hand-tiles .fled_tile.fled_selectable:hover::after,
+#fled_solo-hand .fled_tile.fled_selectable:hover::after {
     background-color: rgba(255, 255, 255, .1);
 }
-.fled_player-hand-tiles .fled_tile.fled_selected:hover::after {
+.fled_player-hand-tiles .fled_tile.fled_selected:hover::after,
+#fled_solo-hand .fled_tile.fled_selected:hover::after {
     background-color: unset;
 }
 
-.fled_player-hand-tiles .fled_tile.fled_selectable:not(.fled_selected) {
+.fled_player-hand-tiles .fled_tile.fled_selectable:not(.fled_selected),
+#fled_solo-hand .fled_tile.fled_selectable:not(.fled_selected) {
     cursor: pointer;
 }
-.fled_player-hand-tiles .fled_tile.fled_selected {
+.fled_player-hand-tiles .fled_tile.fled_selected,
+#fled_solo-hand .fled_tile.fled_selected {
     top: -5em;
 }
-.fled_state-addTile .fled_player-hand-tiles .fled_tile:not(.fled_selectable):after {
+.fled_state-addTile .fled_player-hand-tiles .fled_tile:not(.fled_selectable):after,
+.fled_state-addGhostTile #fled_solo-hand .fled_tile:not(.fled_selectable):after {
     position: absolute;
     left: 0;
     top: 0;
@@ -1097,6 +1106,23 @@
     background-color: #000;
     opacity: .1;
     cursor: not-allowed;
+}
+
+#fled_solo-hand {
+    position: absolute;
+    perspective: 50em;
+    display: block;
+    right: 2em;
+    top: -2em;
+    width: 32em;
+    height: 20em;
+    z-index: 1;
+    pointer-events: none;
+}
+#fled_body.fled_state-addGhostTile #fled_solo-hand,
+#fled_body.fled_state-discardGhostTile #fled_solo-hand,
+#fled_body.fled_state-client_surrenderGhostTile #fled_solo-hand {
+    pointer-events: all;
 }
 
 .player-board .fled_tile {

@@ -57,6 +57,15 @@ define('FLED_WHISTLE', 40);
 
 define('FLED_BONE', 50);
 
+// Not a real game item... I'm just using it internally
+// to define movements of the Specter.
+define('FLED_ECTOPLASM', 99);
+
+
+define('FLED_SOLO_LOSS_REPLENISH', 0); // Not enough cards to draw
+define('FLED_SOLO_LOSS_SPECTER', 1); // Ghost meeple reaches the prisoner
+define('FLED_SOLO_LOSS_WHISTLE', 2); // Whistle travels back to the Governor tile
+
 
 define('FLED_TILE_YELLOW_BUNK', 1);
 define('FLED_TILE_BLUE_BUNK', 2);
@@ -90,6 +99,10 @@ define('FLED_OPT_HOUND_YES', 2);
 define('FLED_OPT_SPECTER', 101);
 define('FLED_OPT_SPECTER_NO', 1);
 define('FLED_OPT_SPECTER_YES', 2);
+
+define('FLED_OPT_SPECTER_SOLO', 102);
+// There is no NO option
+define('FLED_OPT_SPECTER_SOLO_YES', 2);
 
 
 class FledLogic
@@ -1263,6 +1276,10 @@ class FledLogic
         }
         shuffle($drawPile);
 
+        // In Solo Mode, remove the Chaplain tile
+        if ($options['specterExpansion'] && $playerCount == 1)
+            $drawPile = array_filter($drawPile, fn($tileId) => $tileId != FLED_TILE_CHAPEL);
+
         // Create an empty board
         $width = 14;
         $height = 13;
@@ -1301,6 +1318,7 @@ class FledLogic
                 // This hack is needed because we need to know not to end the game action
                 // until both moves are received.
                 'needMove2' => null,
+                //'justJailed' => true | undefined, // Needed so we can skip turn in solo mode
             ];
         }
 
@@ -1321,7 +1339,7 @@ class FledLogic
                 'pos' => [ 6, 6 ],
             ];
 
-        return new FledLogic((object)[
+        $data = (object)[
             'version' => 1, // Only need to increment for breaking changes after beta release
             'options' => $options,
             'nextPlayer' => 0,
@@ -1339,13 +1357,29 @@ class FledLogic
             'finalTurns' => null, // Once a player has escaped, this counts down to how many turns are left; game over at 0
             'setup' => 0, // Switches to 1 once everyone has played their starter bunks
             'move' => 1,
-        ], $events);
+            //'specterHand' => [],     // Only exists in the solo game
+            //'spectersTurn' => false, // Only exists in the solo game
+        ];
+
+        if ($playerCount == 1)
+        {
+            $data->specterHand = [];
+            $data->spectersTurn = false;
+        }
+
+        return new FledLogic($data, $events);
     }
 
     // Only intended for unit testing
     public function setBoard($board)
     {
         $this->data->board = $board;
+    }
+
+    public function countTilesOnBoard(): int
+    {
+        $count = count(array_filter($this->data->board, fn($tileId) => $tileId !== 0));
+        return $count / 2; // Each tile appears in two board cells
     }
 
     public static function makeIndex($x, $y)
@@ -1557,6 +1591,23 @@ class FledLogic
         return array_search($tileId, $this->data->players->$playerId->hand) !== false;
     }
 
+    public function isTileInSpecterHand($tileId)
+    {
+        return array_search($tileId, $this->data->specterHand) !== false;
+    }
+
+    public function removeTileFromSpecterHand($tileId)
+    {
+        if (!$this->isTileInSpecterHand($tileId))
+            throw new Exception('Tile not in specter hand');
+
+        $hand = $this->data->specterHand;
+        $this->data->specterHand = array_values(array_diff($hand, [ $tileId ]));
+
+        // Return value is only used in test code
+        return $this->data->specterHand;
+    }
+
     public function removeTileFromHand($tileId, $playerId)
     {
         if (!$this->isTileInPlayersHand($tileId, $playerId))
@@ -1597,8 +1648,50 @@ class FledLogic
         $this->data->discardPile[] = $tileId;
     }
 
-    public function discardTile($tileId)
+    public function discardTile($tileId, bool $specter)
     {
+        if ($specter)
+        {
+            if (!$this->getOption('specterExpansion'))
+                throw new Exception('Not playing Specter Expansion');
+
+            // TODO: is legal to discard this tile?
+
+            $this->removeTileFromSpecterHand($tileId);
+            $this->addTileToDiscardPile($tileId);
+            $this->eventHandlers->onSpecterTileDiscarded($tileId);
+
+            // Trigger whistle effect, if applicable
+            $item = $this->getTileItem($tileId);
+            if ($item == FLED_WHISTLE || $item == FLED_SHAMROCK)
+            {
+                $warderName = $this->getHighestThreatWarderName();
+                if ($warderName !== null)
+                    $this->moveNpcTowardsPlayer($warderName);
+
+                // Note: the whistle moves after the warder moves
+
+                if (isset($this->data->soloGameOver))
+                    return;
+
+                if ($this->isSpecterInPlay())
+                    $this->moveNpcTowardsPlayer(FLED_NPC_SPECTER);
+
+                if (isset($this->data->soloGameOver))
+                    return;
+            }
+
+            // Now there is one card left, it gets surrendered to the Governor
+            $lastTileId = $this->data->specterHand[0];
+            $this->removeTileFromSpecterHand($lastTileId);
+            $this->data->governorInventory[] = $lastTileId;
+            $this->eventHandlers->onSpecterTileSurrendered($lastTileId);
+
+            $this->data->move++;
+            $this->eventHandlers->onEndSpectersTurn();
+            return;
+        }
+
         $playerId = $this->getNextPlayerId();
 
         // Move tile from player's hand to the Governor's inventory
@@ -1626,16 +1719,22 @@ class FledLogic
         $bunkTileId = $this->getStartingBunkTileId($playerId);
         $isBunkTile = $tileId === $bunkTileId && !$this->isTileOnBoard($tileId);
 
-        // Validate that the player has the tile in hand (or is the starter tile)
-        if (!$isBunkTile && !$this->isTileInPlayersHand($tileId, $playerId))
-            throw new Exception('Tile not in player hand');
-
         if (!$this->isLegalTilePlacement($tileId, $x, $y, $orientation, $isBunkTile))
             throw new Exception('Illegal tile placement');
 
-        // Remove the tile from hand (except starter bunk tile, which doesn't come from hand)
-        if (!$isBunkTile)
-            $this->removeTileFromHand($tileId, $playerId);
+        $isSpecter = $this->getOption('specterExpansion') && $this->isTileInSpecterHand($tileId);
+        if ($isSpecter)
+            $this->removeTileFromSpecterHand($tileId);
+        else
+        {
+            // Validate that the player has the tile in hand (or is the starter tile)
+            if (!$isBunkTile && !$this->isTileInPlayersHand($tileId, $playerId))
+                throw new Exception('Tile not in player hand');
+
+            // Remove the tile from hand (except starter bunk tile, which doesn't come from hand)
+            if (!$isBunkTile)
+                $this->removeTileFromHand($tileId, $playerId);
+        }
 
         $this->setTileAt($tileId, $x, $y, $orientation);
 
@@ -1667,7 +1766,10 @@ class FledLogic
         $this->data->move++;
 
         $this->data->players->$playerId->placedTile = true;
-        $this->eventHandlers->onTilePlaced($playerId, $tileId, $x, $y, $orientation);
+        if ($isSpecter)
+            $this->eventHandlers->onSpecterTilePlaced($tileId, $x, $y, $orientation);
+        else
+            $this->eventHandlers->onTilePlaced($playerId, $tileId, $x, $y, $orientation);
         
         // Check for Moon symbol on the tile and add a new NPC
         // Also, the open window changes when a moon tile is played.
@@ -1804,6 +1906,9 @@ class FledLogic
         $this->data->players->$playerId->escaped = true;
         $this->data->players->$playerId->pos = $this->getTileHeadPos($x, $y);
 
+        if ($this->isSoloGame())
+            $this->data->soloGameOver = 1;
+
         $score = $this->getPlayerScore($playerId);
         $auxScore = $this->getPlayerAuxScore($playerId);
         $this->eventHandlers->onPlayerEscaped($playerId, $score, $auxScore);
@@ -1902,12 +2007,18 @@ class FledLogic
         $this->data->players->$playerId->needMove2 = $needMove2;
 
         // TODO: validate the tile type is appropriate to move the NPC
+        // TODO: validate that the move is legal
 
         $npcName = $move1['npc'];
         $x = $move1['x'];
         $y = $move1['y'];
         $targetPlayerColor = $move1['c'];
-        $this->moveNpc($npcName, $x, $y, $targetPlayerColor);
+        $targetPlayerId = $this->getPlayerIdByColorName($targetPlayerColor);
+        $this->moveNpc($npcName, $x, $y, $targetPlayerId);
+
+        // Don't prompt for a second move if the solo game is over now
+        if (isset($this->data->soloGameOver))
+            $this->data->players->$playerId->needMove2 = null;
     }
 
     public function discardTileToMoveNpcs_move2($move2)
@@ -1928,11 +2039,14 @@ class FledLogic
         ))
             throw new Exception('Unexpected NPC for second move');
 
+        // TODO: validate that the move is legal
+
         $npcName = $move2['npc'];
         $x = $move2['x'];
         $y = $move2['y'];
         $targetPlayerColor = $move2['c'];
-        $this->moveNpc($npcName, $x, $y, $targetPlayerColor);
+        $targetPlayerId = $this->getPlayerIdByColorName($targetPlayerColor);
+        $this->moveNpc($npcName, $x, $y, $targetPlayerId);
 
         // We are no longer waiting for a second move
         $this->data->players->$playerId->needMove2 = null;
@@ -1943,10 +2057,8 @@ class FledLogic
         return isset($this->data->npcs->specter);
     }
 
-    function moveNpc($npcName, $x, $y, $targetPlayerColor)
+    function moveNpc($npcName, $x, $y, $targetPlayerId, bool $specterTurn = false)
     {
-        $targetPlayerId = $this->getPlayerIdByColorName($targetPlayerColor);
-
         $toBunk = false;
         $frightened = false;
         $toSolitary = false;
@@ -1964,13 +2076,23 @@ class FledLogic
             $y = $headPos[1];
         }
         
-        // Verify that target player is at (x, y)
+        // In a multiplayer game, verify that target player is at (x, y).
+        // But, in a solo game and it's the Specter's turn, simply
+        // determine whether or not the player is at (x, y).
         $targetPlayer = null;
         if ($targetPlayerId)
         {
             $targetPlayer = $this->data->players->$targetPlayerId;
-            if ($targetPlayer->pos[0] != $x || $targetPlayer->pos[1] != $y)
-                throw new Exception('Target player is not there');
+            if ($specterTurn)
+            {
+                if ($targetPlayer->pos[0] != $x || $targetPlayer->pos[1] != $y)
+                    $targetPlayer = null;
+            }
+            else
+            {
+                if ($targetPlayer->pos[0] != $x || $targetPlayer->pos[1] != $y)
+                    throw new Exception('Target player is not there');
+            }
         }
 
         if (!isset($this->data->npcs->$npcName))
@@ -2017,6 +2139,8 @@ class FledLogic
                         {
                             $this->data->players->$targetPlayerId->inSolitary = true;
                             $this->data->players->$targetPlayerId->pos = $this->getTilePosition(FLED_TILE_SOLITARY_CONFINEMENT);
+                            if ($this->isSoloGame())
+                                $this->data->players->$targetPlayerId->justJailed = true;
                             $toSolitary = true;
                         }
                         else
@@ -2040,13 +2164,18 @@ class FledLogic
             }
             else if ($npcName == FLED_NPC_SPECTER)
             {
-                // If player is not in solitary then frighten player back to his bunk (do not remove shackles)
-                if (!$this->isPlayerInSolitary($targetPlayerId))
+                if ($this->isSoloGame())
+                    $this->data->soloGameOver = 1;
+                else
                 {
-                    $bunkTileId = $this->getStartingBunkTileId($targetPlayerId);
-                    $this->data->players->$targetPlayerId->pos = $this->getTilePosition($bunkTileId);
-                    $toBunk = true;
-                    $frightened = true;
+                    // If player is not in solitary then frighten player back to his bunk (do not remove shackles)
+                    if (!$this->isPlayerInSolitary($targetPlayerId))
+                    {
+                        $bunkTileId = $this->getStartingBunkTileId($targetPlayerId);
+                        $this->data->players->$targetPlayerId->pos = $this->getTilePosition($bunkTileId);
+                        $toBunk = true;
+                        $frightened = true;
+                    }
                 }
             }
         }
@@ -2057,7 +2186,16 @@ class FledLogic
             $this->data->whistlePos = ($this->data->whistlePos + 4) % 5;
 
         $needMove2 = isset($this->data->players->$playerId->needMove2) ? $this->data->players->$playerId->needMove2 : null;
-        $this->eventHandlers->onPlayerMovedNpc($playerId, $targetPlayerId, $x, $y, $npcName, $path, $needMove2);
+        if ($specterTurn)
+            $this->eventHandlers->onSpecterMovedNpc(!!$targetPlayer, $x, $y, $npcName, $path);
+        else
+            $this->eventHandlers->onPlayerMovedNpc($playerId, $targetPlayerId, $x, $y, $npcName, $path, $needMove2);
+
+        if (isset($this->data->soloGameOver))
+        {
+            $this->eventHandlers->onLostSoloGame(FLED_SOLO_LOSS_SPECTER);
+            return;
+        }
 
         if ($toBunk)
             $this->eventHandlers->onPlayerSentToBunk($targetPlayerId, $frightened);
@@ -2078,7 +2216,16 @@ class FledLogic
         }
 
         if (FledLogic::isWarder($npcName))
+        {
             $this->eventHandlers->onWhistleMoved($playerId, $this->getSafeRollCallRooms());
+
+            // Solo game ends if the whistle returns to the Governor tile
+            if ($this->isSoloGame() && $this->getWhistlePosition() == 4)
+            {
+                $this->data->soloGameOver = 1;
+                $this->eventHandlers->onLostSoloGame(FLED_SOLO_LOSS_WHISTLE);
+            }
+        }
     }
 
     public function releasePlayerFromSolitary($playerId)
@@ -2092,6 +2239,9 @@ class FledLogic
         $unshackleTile = $this->data->players->$playerId->shackleTile;
         $this->data->players->$playerId->shackleTile = 0;
         $this->data->players->$playerId->inSolitary = false;
+
+        if ($this->isSoloGame())
+            unset($this->data->players->$playerId->justJailed);
 
         $this->data->governorInventory[] = $unshackleTile;
 
@@ -2139,14 +2289,24 @@ class FledLogic
         $this->eventHandlers->onActionComplete($playerId, $actionsPlayed);
     }
 
-    public function surrenderTile($tileId)
+    public function surrenderTile($tileId, $specter)
     {
         $playerId = $this->getNextPlayerId();
 
-        // Verify that the player holds this tile in hand
-        $hand = $this->data->players->$playerId->hand;
-        if (array_search($tileId, $hand) === false)
-            throw new Exception('Tile not held');
+        if ($specter)
+        {
+            if (!$this->getOption('specterExpansion'))
+                throw new Exception('Not playing Specter Expansion');
+
+            // TODO: is legal to discard this tile?
+
+            $this->removeTileFromSpecterHand($tileId);
+            $this->data->governorInventory[] = $tileId;
+            $this->eventHandlers->onSpecterTileSurrendered($tileId);
+
+            $this->data->move++;
+            return;
+        }
 
         // Verify the player has actions remaining
         $actionsPlayed = $this->data->players->$playerId->actionsPlayed;
@@ -2205,6 +2365,13 @@ class FledLogic
                     $drawnBeforeShuffle = [];
                     $drawnAfterShuffle = [];
                     $this->data->hardLabor = 1;
+
+                    if ($this->isSoloGame())
+                    {
+                        $this->data->soloGameOver = 1;
+                        $this->eventHandlers->onLostSoloGame(FLED_SOLO_LOSS_REPLENISH);
+                        return;
+                    }
                     break;
                 }
 
@@ -2225,12 +2392,87 @@ class FledLogic
         $this->data->move++;
 
         $drawPileCount = count($this->data->drawPile);
-        $this->eventHandlers->onTilesDrawn($playerId, $drawnBeforeShuffle, $drawnAfterShuffle, $drawPileCount);
+        $this->eventHandlers->onTilesDrawn($playerId, $drawnBeforeShuffle, $drawnAfterShuffle, $drawPileCount, false);
         $this->eventHandlers->onEndTurn();
+    }
+
+    public function drawGhostTiles()
+    {
+        $wasShuffled = false;
+        $drawnBeforeShuffle = [];
+        $drawnAfterShuffle = [];
+        while (count($this->data->specterHand) < 3)
+        {
+            // Reshuffle the discard pile into a new draw pile if the draw pile is empty
+            if (!count($this->data->drawPile))
+            {
+                if (!count($this->data->discardPile))
+                {
+                    $drawnBeforeShuffle = [];
+                    $drawnAfterShuffle = [];
+
+                    $this->data->soloGameOver = 1;
+                    $this->eventHandlers->onLostSoloGame(FLED_SOLO_LOSS_REPLENISH);
+                    return;
+                }
+
+                $this->data->drawPile = $this->data->discardPile;
+                $this->data->discardPile = [];
+                shuffle($this->data->drawPile);
+                $wasShuffled = true;
+            }
+
+            $tileId = array_shift($this->data->drawPile);
+            $this->data->specterHand[] = $tileId;
+            if ($wasShuffled)
+                $drawnAfterShuffle[] = $tileId;
+            else
+                $drawnBeforeShuffle[] = $tileId;
+        }
+        
+        // $this->data->move++; // KILL?
+
+        $drawPileCount = count($this->data->drawPile);
+        $this->eventHandlers->onTilesDrawn($this->getNextPlayerId(), $drawnBeforeShuffle, $drawnAfterShuffle, $drawPileCount, true);
     }
 
     public function advanceNextPlayer()
     {
+        if ($this->isSoloGame())
+        {
+            $playerId = $this->getNextPlayerId();
+            $this->data->players->$playerId->placedTile = false;
+            $this->data->players->$playerId->actionsPlayed = 0;
+
+            // Only take a Specter turn once the game has started.
+            // i.e. not after placing initial bunk tile.
+            if ($this->getMoveCount() > 1 && !$this->data->spectersTurn)
+            {
+                $this->data->spectersTurn = true;
+                $this->eventHandlers->onSpectersTurn();
+
+                // Deal out 3 ghost tiles
+                $this->drawGhostTiles();
+
+                // TODO: if there are no playable choices, automate the actions; otherwise, give player chance to act
+
+                // Determine if the next player should lose a turn from being in Solitary Confinement
+                if ($this->isPlayerInSolitary($playerId))
+                {
+                    if (isset($this->data->players->$playerId->justJailed))
+                        unset($this->data->players->$playerId->justJailed);
+                    else
+                        $this->releasePlayerFromSolitary($playerId);
+                }
+            }
+            else
+            {
+                $this->data->spectersTurn = false;
+            }
+
+            return $this->getNextPlayerId();
+        }
+
         do
         {
             $this->data->nextPlayer = ($this->data->nextPlayer + 1) % count($this->data->order);
@@ -2409,6 +2651,13 @@ class FledLogic
         if ($this->wasHardLaborCalled())
             return 100;
 
+        // Solo game ends if the whistle returns to the right-most position
+        if ($this->isSoloGame())
+        {
+            if (isset($this->data->soloGameOver))
+                return 100;
+        }
+
         // If a player has already escaped, the game progression
         // will be 100 - # of turns remaining (even when not
         // enough tiles to draw)
@@ -2437,7 +2686,9 @@ class FledLogic
 
     public function getOption($optionName)
     {
-        return $this->data->options->$optionName;
+        return isset($this->data->options->$optionName)
+            ? $this->data->options->$optionName
+            : null;
     }
 
     public function getHandTilesEligibleForMovement()
@@ -2554,12 +2805,16 @@ class FledLogic
             $paths = array_merge($paths, $this->traverseUnderGround($x, $y, $distance * 3));
         }
         if ($item !== FLED_TOOL_SPOON) {
-            $paths = array_merge($paths, $this->traverseAboveGround($item, $x, $y, 1, $distance));
+            $paths = array_merge($paths, $this->traverseAboveGround([ $item ], $x, $y, 1, $distance));
         }
         return $paths;
     }
 
-    public function traverseAboveGround($item, $xStart, $yStart, $minDistance, $maxDistance) {
+    //
+    // Determine the set of possible paths starting at ($xStart, $yStart) that are
+    // between $minDistance and $maxDistance steps away and using the specified $items.
+    //
+    public function traverseAboveGround($items, $xStart, $yStart, $minDistance, $maxDistance) {
         $bestPathByIndex = [];
         $traversals = [];
         $visited = [];
@@ -2605,7 +2860,18 @@ class FledLogic
                 $dy = $delta[1];
                 $thisRoomEgress = $this->getEgressType($x, $y, $dir);
                 $adjRoomEgress = $this->getEgressType($x + $dx, $y + $dy, ($dir + 2) % 4);
-                $traversalCost = $this->getTraversalCost($thisRoomEgress, $adjRoomEgress, $item, $effectiveItem);
+                [ $traversalCost, $effectiveItem ] =
+                    array_reduce($items,
+                        function($carry, $item) use ($thisRoomEgress, $adjRoomEgress)
+                        {
+                            $min = $carry[0];
+                            $cost = $this->getTraversalCost($thisRoomEgress, $adjRoomEgress, $item, $effectiveItem);
+                            if ($cost < $min)
+                                return [ $cost, $effectiveItem ];
+                            return $carry;
+                        },
+                        [ PHP_INT_MAX, FLED_EMPTY ]
+                    );
                 if ($distance + $traversalCost <= $maxDistance) {
                     $traversals[] = [
                         'distance' => $distance + $traversalCost,
@@ -2616,12 +2882,106 @@ class FledLogic
             }
         }
 
-        return array_values(array_map(fn($path) => $this->collapseDoubleTilesInTraversal($path), $bestPathByIndex));
+        return array_values(array_map(fn($path) => $this->collapseDoubleTilesInTraversal($path, 'path'), $bestPathByIndex));
     }
 
-    public function collapseDoubleTilesInTraversal($traversal)
+    //
+    // Determine the set of possible paths starting at ($xStart, $yStart) that are
+    // using the specified $items and can step through grid cells that have no tiles.
+    // This is used for path planning NPCs in Solo Mode when determining the shortest
+    // path to reach the player.
+    //
+    public function traverseAboveGroundHypothetically($isSpecter, $xStart, $yStart) {
+        $bestPathByIndex = [];
+        $traversals = [];
+        $visited = [];
+
+        // Start in the current room
+        $traversals[] = [
+            'path' => [
+                [ $xStart, $yStart ],
+            ],
+            'distance' => 0,
+            'isHypothetical' => false,
+            'realPath' => [
+                [ $xStart, $yStart ],
+            ],
+        ];
+
+        // Check to see if the NPC is already in the same room as the player
+        $playerId = $this->getNextPlayerId();
+        $playerPos = $this->data->players->$playerId->pos;
+        if ($playerPos[0] == $xStart && $playerPos[1] == $yStart)
+        {
+            $index = FledLogic::makeIndex($xStart, $yStart);
+            $path = $traversals[0]['path'];
+            $bestPathByIndex[$index] = [
+                'path' => $path,
+                'distance' => 0,
+                'isHypothetical' => false,
+                'realPath' => $path,
+            ];
+            array_pop($traversals);
+        }
+
+        $directions = [
+            FLED_DIRECTION_NORTH => [  0, -1 ],
+            FLED_DIRECTION_EAST =>  [  1,  0 ],
+            FLED_DIRECTION_SOUTH => [  0,  1 ],
+            FLED_DIRECTION_WEST =>  [ -1,  0 ],
+        ];
+
+        while (count($traversals))
+        {
+            $traversal = array_shift($traversals);
+            $distance = $traversal['distance'];
+            $path = $traversal['path'];
+            $wasHypothetical = $traversal['isHypothetical'];
+            $realPath = $traversal['realPath'];
+
+            $x = $path[count($path) - 1][0];
+            $y = $path[count($path) - 1][1];
+            $index = FledLogic::makeIndex($x, $y);
+            if (array_key_exists($index, $visited) && $visited[$index] <= $distance) continue;
+            $visited[$index] = $distance;
+
+            if ($distance >= 1) {
+                $bestPathByIndex[$index] = [
+                    'path' => $path,
+                    'distance' => $distance,
+                    'isHypothetical' => $wasHypothetical,
+                    'realPath' => $realPath,
+                ];
+            }
+
+            foreach ($directions as $dir => $delta)
+            {
+                $dx = $delta[0];
+                $dy = $delta[1];
+                $newX = $x + $dx;
+                $newY = $y + $dy; 
+                if ($newX < 1 || $newX >= FLED_WIDTH) continue;
+                if ($newY < 1 || $newY >= FLED_HEIGHT) continue;
+                $thisRoomEgress = $this->getEgressType($x, $y, $dir);
+                $adjRoomEgress = $this->getEgressType($newX, $newY, ($dir + 2) % 4);
+                [ $traversalCost, $isHypothetical ] = $this->getHypotheticalTraversalCost($thisRoomEgress, $adjRoomEgress, $isSpecter);
+                if ($distance + $traversalCost <= FLED_WIDTH * FLED_HEIGHT) {
+                        $traversals[] = [
+                        'distance' => $distance + $traversalCost,
+                        'path' => array_merge($path, [ [ $newX, $newY ] ]),
+                        'isHypothetical' => $wasHypothetical || $isHypothetical,
+                        'realPath' => $wasHypothetical || $isHypothetical ? $realPath : array_merge($realPath, [ [ $newX, $newY ] ]),
+                    ];
+                }
+            }
+        }
+
+        return array_values(array_map(fn($path) => $this->collapseDoubleTilesInTraversal($path, 'realPath'), $bestPathByIndex));
+    }
+
+    public function collapseDoubleTilesInTraversal($traversal, $propName)
     {
-        $path = $traversal['path'];
+        $path = $traversal[$propName];
         for ($i = count($path) - 1; $i > 0; $i--)
         {
             $x = $path[$i][0];
@@ -2637,7 +2997,7 @@ class FledLogic
                 $i--; // We just paired two indices... it can't match a third. So skip the next check
             }
         }
-        $traversal['path'] = $path;
+        $traversal[$propName] = $path;
         return $traversal;
     }
 
@@ -2646,6 +3006,13 @@ class FledLogic
         $effectiveItem = FLED_EMPTY;
         if ($egress1 === FLED_EGRESS_NONE || $egress2 === FLED_EGRESS_NONE)
             return 99;
+
+        if ($egress1 === FLED_EGRESS_OPEN && $egress2 === FLED_EGRESS_OPEN)
+            return 0;
+
+        // Ghost can move through any egress
+        if ($item === FLED_ECTOPLASM && $this->getOption('specterExpansion'))
+            return 1;
 
         $needKey = $egress1 === FLED_EGRESS_DOOR || $egress2 == FLED_EGRESS_DOOR;
         $needFile = $egress1 === FLED_EGRESS_WINDOW || $egress2 === FLED_EGRESS_WINDOW;
@@ -2667,10 +3034,48 @@ class FledLogic
             $effectiveItem = FLED_TOOL_FILE;
             return 1;
         }
-        else if ($egress1 === FLED_EGRESS_OPEN && $egress2 === FLED_EGRESS_OPEN)
-            return 0;
 
         return 99;
+    }
+
+    // Used for planning NPC movement in Solo mode
+    // Returns the cost and whether the movement is hypothetical (i.e. the one or both tiles don't exist)
+    public function getHypotheticalTraversalCost($egress1, $egress2, $isSpecter)
+    {
+        // Can move within a double room for free
+        if ($egress1 === FLED_EGRESS_OPEN && $egress2 === FLED_EGRESS_OPEN)
+            return [ 0, false ];
+
+        // If both tiles are missing, the cost goes up (to favour valid, existing paths)
+        if ($egress1 === FLED_EGRESS_NONE && $egress2 === FLED_EGRESS_NONE)
+            return [ 5, true ];
+
+        // Ghost can move through any egress
+        if ($isSpecter)
+        {
+            // If only one tile missing, increase the cost a little
+            if ($egress1 === FLED_EGRESS_NONE || $egress2 === FLED_EGRESS_NONE)
+                return [ 3, true ]; // it would cost 4 to go around but only 2 to go straight through if another tile was added
+                
+            return [ 1, false ];
+        }
+
+        $needKey = $egress1 === FLED_EGRESS_DOOR || $egress2 == FLED_EGRESS_DOOR;
+        $needFile = $egress1 === FLED_EGRESS_WINDOW || $egress2 === FLED_EGRESS_WINDOW;
+        $needBoot = $egress1 === FLED_EGRESS_ARCHWAY || $egress2 === FLED_EGRESS_ARCHWAY;
+
+        if ($needFile) // Warder can't go through bars; and Specter already dealt with above
+            return [ 9999, false ];
+
+        if ($egress1 === FLED_EGRESS_NONE || $egress2 === FLED_EGRESS_NONE)
+            return [ 3, true ]; // it would cost 4 to go around but only 2 to go straight through if another tile was added
+
+        if ($needKey || $needBoot)
+            return [ 1, false ];
+        
+        // Otherwise, the egress is unknown because a tile hasn't been placed here yet.
+        // Assume some value to indicate that passage *could* be possible eventually...
+        return [ 5, true ];
     }
 
     public function traverseUnderGround($xStart, $yStart, $maxDistance)
@@ -2750,7 +3155,7 @@ class FledLogic
             }
         }
 
-        return array_values(array_map(fn($path) => $this->collapseDoubleTilesInTraversal($path), $bestPathByIndex));
+        return array_values(array_map(fn($path) => $this->collapseDoubleTilesInTraversal($path, 'path'), $bestPathByIndex));
     }
 
     public function getHandTilesEligibleForInventory()
@@ -2908,6 +3313,278 @@ class FledLogic
         return $legalMoves;
     }
 
+    // Solo mode
+    public function getLegalSpecterTileMoves()
+    {
+        $hand = $this->data->specterHand;
+
+        $legalMoves = [];
+
+        // Scan the board for empty cells that are adjacent to already-placed tiles.
+        $availableCells = [];
+        for ($x = 0; $x < 14; $x++) {
+            for ($y = 0; $y < 14; $y++) {
+                $index = FledLogic::makeIndex($x, $y);
+                $tileId = $this->getTileAt($x, $y);
+                if ($tileId) continue;
+                $availableCells[$index] = 0;
+
+                // Test each direction from the current cell
+                $directions = [ [ 0, -1 ], [ 1, 0 ], [ 0, 1 ], [ -1, 0 ] ];
+                foreach ($directions as $dir)
+                {
+                    $xx = $x + $dir[0];
+                    $yy = $y + $dir[1];
+                    $adjTileIdAndOrientation = $this->getTileAt($xx, $yy);
+                    if (!$adjTileIdAndOrientation) continue;
+
+                    $availableCells[$index] = $availableCells[$index] + 1;
+                }
+
+                // If we found a tile in all four directions, that means this cell is
+                // a 1x1 space and therefore there is no room to place a 2x1 tile.
+                if ($availableCells[$index] == 4)
+                    unset($availableCells[$index]);
+            }
+        }
+        $availableCells = array_map(fn($index) => FledLogic::parseIndex($index), array_keys($availableCells));
+
+        $orientations = [
+            FLED_ORIENTATION_NORTH_SOUTH,
+            FLED_ORIENTATION_EAST_WEST,
+            FLED_ORIENTATION_SOUTH_NORTH,
+            FLED_ORIENTATION_WEST_EAST,
+        ];
+
+        $goldTileIds = array_filter($hand, fn($tileId) => FledLogic::$FledTiles[$tileId]['color'] == FLED_COLOR_GOLD);
+        foreach ($goldTileIds as $tileId)
+        {
+            $tileLegalMoves = [];
+
+            foreach ($availableCells as $cell)
+            {
+                foreach ($orientations as $orientation)
+                {
+                    if ($this->isLegalTilePlacement($tileId, $cell[0], $cell[1], $orientation, false))
+                        $tileLegalMoves[] = [ $tileId, $cell[0], $cell[1], $orientation ];
+                }
+            }
+
+            // Check if we need to enforce "most threatening to the user" placement
+            if ($this->isMoonTile($tileId) || $tileId == FLED_TILE_SPECTER)
+            {
+                // Calculate 'threat' score per placement
+                $maxThreat = PHP_INT_MIN;
+                $threatByTile = [];
+                foreach ($tileLegalMoves as $move)
+                {
+                    $threat = $this->calculateTileThreatToPlayer($move);
+                    $tileId = $move[0];
+                    $threatByTile[$tileId] = $threat;
+                }
+
+                // And only keep highest-threat placements
+                foreach ($tileLegalMoves as $move)
+                {
+                    $tileId = $move[0];
+                    if ($threatByTile[$tileId] == $maxThreat)
+                        $legalMoves[] = $move;
+                }
+            }
+        }
+
+        // Must place a Gold tile if possible 
+        if (count($legalMoves))
+            return $legalMoves;
+
+        $shamrockWhistleCount = 0; // TODO: must set at least one aside
+
+        $otherTileIds = array_filter($hand, fn($tileId) => FledLogic::$FledTiles[$tileId]['color'] != FLED_COLOR_GOLD);
+        foreach ($otherTileIds as $tileId)
+        {
+            $tile = FledLogic::$FledTiles[$tileId];
+            if ($tile['contains'] == FLED_SHAMROCK || $tile['contains'] == FLED_WHISTLE)
+                $shamrockWhistleCount++;
+
+            foreach ($availableCells as $cell)
+            {
+                foreach ($orientations as $orientation)
+                {
+                    if ($this->isLegalTilePlacement($tileId, $cell[0], $cell[1], $orientation, false))
+                        $legalMoves[] = [ $tileId, $cell[0], $cell[1], $orientation ];
+                }
+            }
+        }
+
+        // Cannot play a shamrock/whistle if there's only one
+        if ($shamrockWhistleCount == 1) {
+            $legalMoves = array_filter($legalMoves, function($move) {
+                $tileId = $move[0];
+                $tile = FledLogic::$FledTiles[$tileId];
+                $contains = $tile['contains'];
+                return $contains != FLED_SHAMROCK && $contains != FLED_WHISTLE;
+            });
+        }
+        
+        return $legalMoves;
+    }
+
+    // Solo Mode
+    private function calculateTileThreatToPlayer($move)
+    {
+        $playerId = $this->getNextPlayerId();
+        $playerPos = $this->data->players->$playerId->pos;
+
+        $tileId = $move[0];
+        $x = $move[1];
+        $y = $move[2];
+        $orientation = $move[3];
+        
+        // Calculate all possible paths
+        // Note: this is not the optimal solution... but I've already spent
+        // way too much time on this game. Will reuse existing functions.
+        $items =
+            $tileId == FLED_TILE_SPECTER
+                ? [ FLED_TOOL_BOOT, FLED_TOOL_KEY, FLED_TOOL_FILE ]
+                : [ FLED_TOOL_BOOT, FLED_TOOL_KEY ];
+        
+        // Temporarily place the tile at (x, y)
+        $board = clone $this->data->board;
+        $this->setTileAt($tileId, $x, $y, $orientation);
+
+        // Measure the traversals
+        $traversals = $this->traverseAboveGround($items, $x, $y, 1, $this->countTilesOnBoard());
+
+        // Remove the temporary tile
+        $this->data->board = clone $board;
+
+        // Find the traversal that ends at the player's location
+        // (should be one or zero paths)
+        $pathsToPlayer = array_filter($traversals, function($t) use ($playerPos)
+        {
+            $path = $t['path'];
+            $destination = $path[count($path) - 1];
+            return $destination[0] == $playerPos[0] && $destination[1] == $playerPos[1];
+        });
+        if (count($pathsToPlayer) == 0)
+            return PHP_INT_MIN; // No path to player
+        $pathToPlayer = array_shift($pathsToPlayer);
+        return -count($pathToPlayer);
+    }
+
+    // Solo Mode
+    private function calculateNpcThreatToPlayer($npcName)
+    {
+        // No threat if the NPC is not in the game yet
+        if (!isset($this->data->npcs->$npcName))
+            return PHP_INT_MIN;
+
+        $playerId = $this->getNextPlayerId();
+        $playerPos = $this->data->players->$playerId->pos;
+
+        $npc = $this->data->npcs->$npcName;
+        $x = $npc->pos[0];
+        $y = $npc->pos[1];
+        
+        // Calculate all possible paths
+        // Note: this is not the optimal solution... but I've already spent
+        // way too much time on this game. Will reuse existing functions.
+        $items =
+            $npcName == FLED_TILE_SPECTER
+                ? [ FLED_ECTOPLASM ]
+                : [ FLED_TOOL_BOOT, FLED_TOOL_KEY ];
+
+        // Measure the traversals
+        $traversals = $this->traverseAboveGround($items, $x, $y, 1, $this->countTilesOnBoard());
+
+        // Find the traversal that ends at the player's location
+        // (should be one or zero paths)
+        $pathsToPlayer = array_filter($traversals, function($t) use ($playerPos)
+        {
+            $path = $t['path'];
+            $destination = $path[count($path) - 1];
+            return $destination[0] == $playerPos[0] && $destination[1] == $playerPos[1];
+        });
+        if (count($pathsToPlayer) == 0)
+            return PHP_INT_MIN; // No path to player
+        $pathToPlayer = array_shift($pathsToPlayer);
+        return -count($pathToPlayer);
+    }
+
+    // Solo Mode
+    private function getHighestThreatWarderName(): string | null
+    {
+        $maxThreat = PHP_INT_MIN;
+        $maxThreatNpcName = FLED_NPC_WARDER_1; // Warder 1 is always in the game
+
+        foreach ([ FLED_NPC_WARDER_1, FLED_NPC_WARDER_2, FLED_NPC_WARDER_3 ] as $npcName)
+        {
+            $threat = $this->calculateNpcThreatToPlayer($npcName);
+            if ($threat <= $maxThreat)
+                continue;
+            $maxThreat = $threat;
+            $maxThreatNpcName = $npcName;
+        }
+
+        return $maxThreatNpcName;
+    }
+
+    // Solo Mode
+    private function moveNpcTowardsPlayer($npcName)
+    {
+        $playerId = $this->getNextPlayerId();
+        $playerPos = $this->data->players->$playerId->pos;
+
+        $npc = $this->data->npcs->$npcName;
+        $x = $npc->pos[0];
+        $y = $npc->pos[1];
+
+        $isSpecter = $npcName == FLED_TILE_SPECTER;
+
+        // Calculate all possible paths
+        // Note: this is not the optimal solution... but I've already spent
+        // way too much time on this game. Will reuse existing functions.
+
+        // Measure the traversals
+        $traversals = $this->traverseAboveGroundHypothetically($isSpecter, $x, $y);
+
+        // The rules say that the NPCs have to move *towards* the player.
+        // We'll use a heuristic that scores the entire board, including
+        // board cells where tiles haven't been placed yet.
+        $pathsToPlayer = array_filter($traversals, function($t) use ($playerPos)
+        {
+            $path = $t['path'];
+            $destination = $path[count($path) - 1];
+            return $playerPos[0] == $destination[0] && $playerPos[1] == $destination[1];
+        });
+        $calcScore = function ($t) use ($playerPos, $x, $y)
+        {
+            $path = $t['path'];
+            $destination = $path[count($path) - 1];
+            // The 10x multiplier is to favour paths that have a shorter distance
+            // to the target (i.e. the player) than the starting position (the NPC)
+            $xDelta1 = pow($destination[0] - $x, 2);
+            $yDelta1 = pow($destination[1] - $y, 2);
+            $xDelta2 = pow($playerPos[0] - $destination[0], 2);
+            $yDelta2 = pow($playerPos[1] - $destination[1], 2);
+            $delta1 = sqrt($xDelta1 + $yDelta1);
+            $delta2 = sqrt($xDelta2 + $yDelta2);
+            return ceil($t['distance'] + $delta1 + 10 * $delta2);
+        };
+        usort($traversals, fn($a, $b) => $calcScore($a) - $calcScore($b));
+
+        $traversal =
+            count($pathsToPlayer) === 1
+                ? array_shift($pathsToPlayer)
+                : array_shift($traversals);
+
+        $maxDistance = $isSpecter ? 1 : 3;
+        $path = $traversal['realPath']; // Take the "real" path because the hypothetical path may not be a legal path (e.g. goes through empty cells)
+        $destination = $path[min($maxDistance, count($path) - 1)];
+
+        $this->moveNpc($npcName, $destination[0], $destination[1], $this->getNextPlayerId(), true);
+    }
+
     // Rules are different for starting tiles... the corridor room must be adjacent
     // to the starting yard tile. Note: we don't need to check egress types because
     // every possible placement of the starting bunk tiles automatically follows the
@@ -2948,6 +3625,37 @@ class FledLogic
         }
 
         return $moves;
+    }
+
+    public function getLegalWarderMoves($name)
+    {
+        $pos = $this->data->npcs->$name->pos;
+        $x = $pos[0];
+        $y = $pos[1];
+        return $this->traverseAboveGround([ FLED_WHISTLE ], $x, $y, 0, 3);
+    }
+
+    public function getLegalHoundMoves()
+    {
+        if (!isset($this->data->npcs->hound))
+            return [];
+        $pos = $this->data->npcs->hound->pos;
+        $x = $pos[0];
+        $y = $pos[1];
+        return [
+            ...$this->traverseAboveGround([ FLED_BONE ], $x, $y, 0, 3),
+            ...$this->traverseUnderGround($x, $y, FLED_WIDTH + FLED_HEIGHT),
+        ];
+    }
+
+    public function getLegalSpecterMoves()
+    {
+        if (!isset($this->data->npcs->specter))
+            return [];
+        $pos = $this->data->npcs->specter->pos;
+        $x = $pos[0];
+        $y = $pos[1];
+        return $this->traverseAboveGround([ FLED_ECTOPLASM ], $x, $y, 0, 1);
     }
 
     public function canPlayerEscape($playerId)
@@ -3021,6 +3729,9 @@ class FledLogic
     {
         $player = $this->data->players->$playerId;
 
+        if ($this->isSoloGame() && isset($this->data->soloGameOver) && !$player->escaped)
+            return 0;
+
         $sum = 0;
         foreach ($player->inventory as $tileId)
         {
@@ -3064,6 +3775,11 @@ class FledLogic
         return $this->data->order;
     }
 
+    public function isSoloGame(): bool
+    {
+        return count($this->data->order) == 1;
+    }
+
     public function getPlayerPositions()
     {
         return array_map(fn($player) => $player->pos, (array)$this->data->players);
@@ -3077,6 +3793,19 @@ class FledLogic
     public function getMoveCount()
     {
         return $this->data->move;
+    }
+
+    public function isSpectersTurn(): bool
+    {
+        if (!$this->isSoloGame())
+            return false;
+
+        // Don't have a Specter turn until after the player has
+        // placed the starting bunk and taken the first turn.
+        if ($this->getMoveCount() < 2)
+            return false;
+
+        return $this->data->spectersTurn;
     }
 
     // Return only the public data and the data private to the given player 

@@ -17,7 +17,9 @@ if (!defined('BGA_STATE_START'))
     define('STATE_ADD_STARTER_TILE', 10);
     define('STATE_DEBUG_SETSTATE', 11);
     define('STATE_ADD_TILE', 20);
+    define('STATE_ADD_GHOST_TILE', 21); // Solo Mode
     define('STATE_PLAY_TILES', 30);
+    define('STATE_DISCARD_GHOST_TILE', 31); // Solo Mode
     define('STATE_DRAW_TILES', 40);
     define('STATE_NEXT_TURN', 50);
     define('BGA_STATE_END', 99);
@@ -84,6 +86,22 @@ $machinestates = [
         ],
     ],
 
+    // Add tile to prison (solo mode)
+    STATE_ADD_GHOST_TILE => [
+        'name' => 'addGhostTile',
+        'description' => clienttranslate('${actplayer} must add a tile to the prison'),
+        'descriptionmyturn' => clienttranslate('${you} must select a tile from the Specter\'s hand to add to the prison'),
+        'type' => 'activeplayer',
+        'possibleactions' => [
+            'placeTile',
+            'surrender',
+            'jsError',
+        ],
+        'transitions' => [
+            'nextPhase' => STATE_DISCARD_GHOST_TILE,
+        ],
+    ],
+
     // Play two tiles
     STATE_PLAY_TILES => [
         'name' => 'playTiles',
@@ -102,6 +120,20 @@ $machinestates = [
             'nextTile' => STATE_PLAY_TILES,
             'nextPhase' => STATE_DRAW_TILES,
             'nextTurn' => STATE_NEXT_TURN, // If player escaped
+        ],
+    ],
+
+    STATE_DISCARD_GHOST_TILE => [
+        'name' => 'discardGhostTile',
+        'description' => clienttranslate('${actplayer} must discard a tile for the Specter'),
+        'descriptionmyturn' => clienttranslate('${actplayer} must discard a tile for the Specter'),
+        'type' => 'activeplayer',
+        'possibleactions' => [
+            'discard',
+            'jsError',
+        ],
+        'transitions' => [
+            'nextTurn' => STATE_NEXT_TURN,
         ],
     ],
 
@@ -131,6 +163,7 @@ $machinestates = [
         'transitions' => [
             'nextStarterTurn' => STATE_ADD_STARTER_TILE,
             'nextTurn' => STATE_ADD_TILE,
+            'ghostTurn' => STATE_ADD_GHOST_TILE,
             'gameOver' => BGA_STATE_END,
         ],
     ],

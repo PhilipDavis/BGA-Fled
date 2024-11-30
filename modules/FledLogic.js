@@ -84,6 +84,7 @@ define([], () => {
         DoubleCorridor: 41,
         DoubleYard: 46,
         DoubleMessHall: 51,
+        SpecterTile: 90,
     };
 
     const Orientation = {
@@ -1152,7 +1153,7 @@ define([], () => {
             minPlayers: 1,
         },
         // Specter Expansion
-        90: {
+        [SpecialTile.SpecterTile]: {
             color: ScrollColor.Gold,
             contains: ToolType.Key,
             rooms: [
@@ -1259,7 +1260,7 @@ define([], () => {
             case 82:
             case 84:
             case 85:
-            case 90: // Specter tile
+            case SpecialTile.SpecterTile:
                 return true;
             default:
                 return false;
@@ -1460,6 +1461,11 @@ define([], () => {
         }
 
         removeTileFromHand(playerId, tileId) {
+            if (!playerId) {
+                this.data.specterHand = this.data.specterHand.filter(t => t != tileId);
+                return this.data.specterHand;
+            }
+
             if (playerId != this.myPlayerId) {
                 this.data.players[playerId].hand--;
                 return;
@@ -1483,12 +1489,17 @@ define([], () => {
         }
 
         addTileToHand(playerId, tileId) {
-            const player = this.data.players[playerId];
-            if (playerId == this.myPlayerId) {
-                player.hand.push(tileId);
+            if (playerId) {
+                const player = this.data.players[playerId];
+                if (playerId == this.myPlayerId) {
+                    player.hand.push(tileId);
+                }
+                else {
+                    player.hand++;
+                }
             }
             else {
-                player.hand++;
+                this.data.specterHand.push(tileId);
             }
         }
 
@@ -1799,12 +1810,12 @@ define([], () => {
                 paths.push(...this.traverseUnderGround(x, y, distance * 3));
             }
             if (item !== ToolType.Spoon) {
-                paths.push(...this.traverseAboveGround(item, x, y, 1, distance));
+                paths.push(...this.traverseAboveGround([ item ], x, y, 1, distance));
             }
             return paths;
         }
 
-        traverseAboveGround(item, xStart, yStart, minDistance, maxDistance) {
+        traverseAboveGround(items, xStart, yStart, minDistance, maxDistance) {
             const bestPathByIndex = {};
             const traversals = [];
             const visited = {};
@@ -1860,7 +1871,10 @@ define([], () => {
                     const dir = Number(dirString);
                     const thisRoomEgress = this.getEgressType(x, y, dir);
                     const adjRoomEgress = this.getEgressType(x + dx, y + dy, (dir + 2) % 4);
-                    const traversalCost = this.getTraversalCost(thisRoomEgress, adjRoomEgress, item);
+                    const traversalCost =
+                        items.reduce((minCost, item) =>
+                            Math.min(minCost, this.getTraversalCost(thisRoomEgress, adjRoomEgress, item))
+                        , Number.MAX_SAFE_INTEGER);
                     if (distance + traversalCost <= maxDistance) {
                         traversals.push({
                             distance: distance + traversalCost,
@@ -2116,6 +2130,145 @@ define([], () => {
             return legalMoves;
         }
 
+        // Solo mode
+        getLegalSpecterTileMoves()
+        {
+            const player = this.data.players[this.myPlayerId];
+            if (!player) return [];
+            let legalMoves = [];
+
+            const availableCells = this.findEmptyCellsAdjacentToTiles();
+
+            const orientations = [
+                Orientation.NorthSouth,
+                Orientation.EastWest,
+                Orientation.SouthNorth,
+                Orientation.WestEast,
+            ];
+
+            const goldTileIds = this.data.specterHand.filter(tileColorIs(ScrollColor.Gold));
+            for (const tileId of goldTileIds) {
+                const tileLegalMoves = [];
+
+                for (const [ x, y ] of availableCells) {
+                    for (const orientation of orientations) {
+                        if (this.isLegalTilePlacement(tileId, x, y, orientation, false)) {
+                            tileLegalMoves.push([ tileId, x, y, orientation ]);
+                        }
+                    }
+                }
+
+                // Check if we need to enforce "most threatening to the user" placement
+                if (tileHasMoon(tileId) || tileId == SpecialTile.SpecterTile) {
+                    // Calculate 'threat' score per placement
+                    let maxThreat = Number.MIN_SAFE_INTEGER;
+                    const threatByPlacement = [];
+                    for (const move of tileLegalMoves) {
+                        const [ , x, y, orientation ] = move;
+                        const key = `${x}_${y}_${orientation}`;
+                        const threat = this.calculateTileThreatToPlayer(move);
+                        const currentThreat = threatByPlacement[key] || Number.MIN_SAFE_INTEGER;
+                        if (threat > maxThreat) {
+                            maxThreat = threat;
+                        }
+                        threatByPlacement[key] = Math.max(currentThreat, threat);
+                    }
+
+                    // And only keep highest-threat placements
+                    for (const move of tileLegalMoves)
+                    {
+                        const [ , x, y, orientation ] = move;
+                        const key = `${x}_${y}_${orientation}`;
+                        if (threatByPlacement[key] == maxThreat)
+                            legalMoves.push(move);
+                    }
+                }
+                else {
+                    // Otherwise, allow all legal placements
+                    legalMoves.push(...tileLegalMoves);
+                }
+            }
+
+            // A player must place a Gold tile if possible 
+            if (legalMoves.length)
+                return legalMoves;
+
+            let shamrockWhistleCount = 0; // TODO: must set at least one aside
+
+            const otherTileIds = this.data.specterHand.filter(tileColorIsNot(ScrollColor.Gold));
+            for (const tileId of otherTileIds) {
+                const tile = Tiles[tileId];
+                if (tile.contains == ItemType.Shamrock || tile.contains == ItemType.Whistle) {
+                    shamrockWhistleCount++;
+                }
+
+                for (const [ x, y ] of availableCells) {
+                    for (const orientation of orientations) {
+                        if (this.isLegalTilePlacement(tileId, x, y, orientation, false)) {
+                            legalMoves.push([ tileId, x, y, orientation ]);
+                        }
+                    }
+                }
+            }
+
+            // Cannot play a shamrock/whistle if there's only one
+            if (shamrockWhistleCount == 1) {
+                function isNotShamrockAndNotWhistle(move) {
+                    const [ tileId ] = move;
+                    return (
+                        !tileContains(ItemType.Shamrock)(tileId) &&
+                        !tileContains(ItemType.Whistle)(tileId)
+                    );
+                }
+                legalMoves = legalMoves.filter(isNotShamrockAndNotWhistle);
+            }
+
+            return legalMoves;
+        }
+
+        // Solo Mode
+        calculateTileThreatToPlayer(move)
+        {
+            const playerId = this.data.order[0];
+            const playerPos = this.data.players[playerId].pos;
+            
+            const [ tileId, x, y, orientation ] = move;
+
+            // Calculate all possible paths
+            // Note: this is not the optimal solution... but I've already spent
+            // way too much time on this game. Will reuse existing functions.
+            const items =
+                tileId == SpecialTile.SpecterTile
+                    ? [ ToolType.Boot, ToolType.Key, ToolType.File ]
+                    : [ ToolType.Boot, ToolType.Key ];
+            
+            // Temporarily place the tile at (x, y)
+            const board = [ ...this.data.board ];
+            this.setTileAt(tileId, x, y, orientation);
+
+            // Measure the traversals
+            const traversals = this.traverseAboveGround(items, x, y, 1, this.countTilesOnBoard());
+
+            // Remove the temporary tile
+            this.data.board = board;
+
+            // Find the traversal that ends at the player's location
+            // (should be one or zero paths)
+            const pathsToPlayer = traversals.filter(t => {
+                const { path } = t;
+                const [ x, y ] = path[path.length - 1];
+                return x == playerPos[0] && y == playerPos[1];
+            });
+            if (!pathsToPlayer.length)
+                return Number.MIN_SAFE_INTEGER; // No path to player
+            return -pathsToPlayer[0].path.length;
+        }
+
+        countTilesOnBoard() {
+            const count = this.data.board.filter(tileId => tileId).length;
+            return count / 2; // Each tile appears in two board cells
+        }
+    
         // Rules are different for starting tiles... the Corridor room must be adjacent
         // to the starting yard tile. Note: we don't need to check egress types because
         // every possible placement of the starting bunk tiles automatically follows the
@@ -2160,7 +2313,7 @@ define([], () => {
 
         getLegalWarderMoves(name) {
             const [ x, y ] = this.data.npcs[name].pos;
-            return this.traverseAboveGround(ItemType.Whistle, x, y, 0, 3);
+            return this.traverseAboveGround([ ItemType.Whistle ], x, y, 0, 3);
         }
 
         getLegalHoundMoves() {
@@ -2168,7 +2321,7 @@ define([], () => {
             if (!hound) return [];
             const [ x, y ] = hound.pos;
             return [
-                ...this.traverseAboveGround(ItemType.Bone, x, y, 0, 3),
+                ...this.traverseAboveGround([ ItemType.Bone ], x, y, 0, 3),
                 ...this.traverseUnderGround(x, y, FledWidth + FledHeight),
             ];
         }
@@ -2177,10 +2330,44 @@ define([], () => {
             const { specter } = this.data.npcs
             if (!specter) return [];
             const [ x, y ] = specter.pos;
-            return this.traverseAboveGround(ItemType.Ectoplasm, x, y, 0, 1);
+            return this.traverseAboveGround([ ItemType.Ectoplasm ], x, y, 0, 1);
         }
 
-        moveNpc(playerId, npcName, x, y) {
+        getLegalSpecterSurrenders() {
+            const whistleShamrockCount = this.data.specterHand.reduce((sum, tileId) => {
+                const item = getTileItem(tileId);
+                return sum + (item === ItemType.Whistle || item === ItemType.Shamrock ? 1 : 0);
+            }, 0);
+
+            // In Step 2, a tile must be surrendered if it can't be added to the prison
+            // If there is only one whistle / shamrock then it can't be surrendered
+            if (whistleShamrockCount === 1) {
+                return this.data.specterHand.filter(tileId => {
+                    const item = getTileItem(tileId);
+                    return item !== ItemType.Whistle && item !== ItemType.Shamrock;
+                });
+            }
+            return this.data.specterHand;
+        }
+
+        getLegalSpecterDiscards() {
+            const whistleShamrockCount = this.data.specterHand.reduce((sum, tileId) => {
+                const item = getTileItem(tileId);
+                return sum + (item === ItemType.Whistle || item === ItemType.Shamrock ? 1 : 0);
+            }, 0);
+
+            // In Step 3, a tile must be discarded to be played
+            // If there is only one whistle / shamrock then it must be discarded
+            if (whistleShamrockCount === 1) {
+                return this.data.specterHand.filter(tileId => {
+                    const item = getTileItem(tileId);
+                    return item === ItemType.Whistle || item === ItemType.Shamrock;
+                });
+            }
+            return this.data.specterHand;
+        }
+
+        moveNpc(npcName, x, y) {
             this.data.npcs[npcName].pos = [ x, y ];
         }
 
@@ -2434,6 +2621,10 @@ define([], () => {
             return !!this.data.npcs.specter;
         }
 
+        get isSoloGame() {
+            return this.data.order.length == 1;
+        }
+
         playerHasShamrockInInventory(playerId) {
             return !!this.data.players[playerId].inventory.find(tileContains(ItemType.Shamrock));
         }
@@ -2468,6 +2659,14 @@ define([], () => {
         set needMove2(npcName) {
             const player = this.data.players[this.myPlayerId];
             player.needMove2 = npcName;
+        }
+
+        get spectersTurn() {
+            return this.data.spectersTurn;
+        }
+
+        set spectersTurn(v) {
+            this.data.spectersTurn = v;
         }
 
         get moveNumber() {

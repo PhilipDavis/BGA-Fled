@@ -115,6 +115,38 @@ function (dojo, declare,
         ],
     };
 
+    const LeftSideHandSlots = {
+        5: [
+            { x:   5, y:  0.5, deg: -24 },
+            { x: 9.1, y: -0.8, deg: -16 },
+            { x:  14, y: -1.7, deg: -10 },
+            { x:  19, y: -2.2, deg:  -5 },
+            { x:  24, y: -2.2, deg:   0 },
+        ],
+        4: [
+            { x: 9.1, y: -0.8, deg: -16 },
+            { x:  14, y: -1.7, deg: -10 },
+            { x:  19, y: -2.2, deg:  -5 },
+            { x:  24, y: -2.2, deg:   0 },
+        ],
+    };
+
+    const SoloHandSlots = {
+        3: [
+            { x:  0, y: -1.5, deg:  -5 },
+            { x: 10, y: -2.0, deg:   0 },
+            { x: 20, y: -1.5, deg:   5 },
+        ],
+        2: [
+            { x:  5, y: -1.5,  deg: -2 },
+            { x: 15, y: -1.5,  deg:  2 },
+        ],
+        1: [
+            { x: 10, y: -2.0, deg:   0 },
+        ],
+    };
+
+
     function calculateTilePosition(xCell, yCell, orientation) {
         // For east->west and south->north, (xCell, yCell) is the bottom/right
         // so we need to offset our box up/left by one cell.
@@ -306,11 +338,25 @@ function (dojo, declare,
                 const { name } = gameui.gamedatas.players[playerId];
                 this.createPlayerArea(playerId, name, color, hand, inventory, shackleTile);
 
+                if (playerIds.length === 1) {
+                    const handDivId = `fled_player-${playerId}-hand`;
+                    createFromTemplate('fled_Templates.soloHand', {}, handDivId, { placement: 'afterend' });
+                }
+
                 this.scoreCounter[playerId] = new ebg.counter();
                 this.scoreCounter[playerId].create(`player_score_${playerId}`);
                 setTimeout(() => {
                     this.scoreCounter[playerId].setValue(scores[playerId]);
                 }, 0);
+            }
+
+            if (fled.isSoloGame) {
+                if (fled.data.specterHand?.length) {
+                    this.moveHandToTheLeft();
+                    fled.data.specterHand.forEach((tileId, index) => {
+                        this.createTileInHand(index, fled.data.specterHand.length, tileId, false, true); 
+                    });
+                }
             }
 
             // Set the bottom sticky CSS rule so the player hand is always at least partially visible
@@ -636,10 +682,10 @@ function (dojo, declare,
             }), `fled_inventory-${PID}`);
         },
 
-        createTileInHand(index, count, tileId, hidden) {
+        createTileInHand(index, count, tileId, hidden, solo = false) {
             const divId = `fled_tile-${tileId}`;
             const className = `${divId} ${hidden ? 'fled_hidden' : ''}`;
-            const handSlots = PlayerHandSlots[count];
+            const handSlots = (solo ? SoloHandSlots : PlayerHandSlots)[count];
             const { x, y, deg } = handSlots[index];
             dojo.place(this.format_block('fled_Templates.tile', {
                 DIV_ID: divId,
@@ -648,7 +694,7 @@ function (dojo, declare,
                 Y_EM: y,
                 DEG: deg,
                 Y_DEG: 0,
-            }), `fled_player-${this.myPlayerId}-hand`);
+            }), solo ? `fled_solo-hand` : `fled_player-${this.myPlayerId}-hand`);
             const tileDiv = document.getElementById(divId);
             tileDiv.addEventListener('click', () => this.onClickSelectableTile(tileId));
             return tileDiv;
@@ -880,14 +926,40 @@ function (dojo, declare,
                     }
                     break;
                 }
+                case 'addGhostTile': {
+                    const moves = fled.getLegalSpecterTileMoves();
+                    this.clientStateArgs.alreadyPlaced = false;
+                    this.clientStateArgs.legalTileMoves = moves;
+                    if (moves.length) {
+                        await this.animateSmartZoomAsync();
+                        const eligibleTiles = Object.keys(moves.reduce((obj, move) => ({ ...obj, [move[0]]: true}), {})).map(s => Number(s));
+                        this.makeTilesSelectable(eligibleTiles, 'fled_solo-hand');
+                    }
+                    else {
+                        this.destroyAllSlots();
+                        this.setClientState('client_surrenderGhostTile', {
+                            descriptionmyturn: _('None of the tiles can be added to the prison. ${you} must select one to surrender'),
+                        });
+                    }
+                    break;
+                }
                 case 'client_selectSlot':
+                case 'client_selectSpecterSlot':
                     this.makeTilesNonSelectable();
                     break;
 
-                case 'client_discardTile': {
+                case 'client_discardTile':
                     this.makeTilesSelectable(fled.myHand);
                     break;
-                }
+
+                case 'discardGhostTile':
+                    this.makeTilesSelectable(fled.getLegalSpecterDiscards());
+                    break;
+
+                case 'client_surrenderGhostTile':
+                    this.makeTilesSelectable(fled.getLegalSpecterSurrenders());
+                    break;
+
                 case 'playTiles': {
                     await this.animateSmartZoomAsync();
                     if (fled.actionsPlayed < 1) {
@@ -1106,6 +1178,7 @@ function (dojo, declare,
                     break;
 
                 case 'client_confirmTilePlacement':
+                case 'client_confirmSpecterTilePlacement':
                     this.addConfirmButton(`fled_button-confirm-placement`, null, this.onClickConfirmTilePlacement); 
                     if (this.last_server_state.name !== 'addStarterTile') {
                         this.addActionButton(`fled_button-cancel-placement`, _('Cancel'), () => this.onClickCancelTilePlacement(), null, false, 'red'); 
@@ -1113,6 +1186,7 @@ function (dojo, declare,
                     break;
 
                 case 'client_selectSlot':
+                case 'client_selectSpecterSlot':
                     this.addActionButton(`fled_button-cancel-slot`, _('Cancel'), () => this.onClickCancelTilePlacement(), null, false, 'red'); 
                     break;
 
@@ -2075,7 +2149,7 @@ function (dojo, declare,
         async animateSmartZoomAsync({ force = false, noExpand = false } = {}) {
             const isAddingTiles =
                 this.isCurrentPlayerActive() &&
-                (this.currentState == 'addTile' || this.currentState == 'addStarterTile' || this.currentState == 'client_confirmTilePlacement') &&
+                /(add.*Tile|client_confirm.*TilePlacement)/.test(this.currentState) &&
                 !this.clientStateArgs.alreadyPlaced
             ;
 
@@ -2221,23 +2295,23 @@ function (dojo, declare,
 
         },
 
-        async animateDrawTileAsync(playerId, tileId) {
+        async animateDrawTileAsync(playerId, tileId, solo) {
             if (playerId != this.myPlayerId) return;
 
             await Promise.all([
-                this.animateHandToMakeRoomForNewTileAsync(),
-                this.animateTileFromDrawPileToMyHandAsync(tileId),
+                this.animateHandToMakeRoomForNewTileAsync(99, solo),
+                this.animateTileFromDrawPileToMyHandAsync(tileId, solo),
             ]);
         },
 
         // Optionally takes an index of where the new card will go
         // (defaults to the last position, left to right)
-        async animateHandToMakeRoomForNewTileAsync(index = 99) {
-            const handDiv = document.getElementById(`fled_player-${this.myPlayerId}-hand`);
+        async animateHandToMakeRoomForNewTileAsync(index = 99, solo = false) {
+            const handDiv = document.getElementById(solo ? `fled_solo-hand` : `fled_player-${this.myPlayerId}-hand`);
             const tileDivs = Array.from(handDiv.children);
             await Promise.all(
                 tileDivs.map(async (tileDiv, i) => {
-                    await this.animateHandTileToNewPositionAsync(tileDiv, i < index ? i : i + 1, tileDivs.length + 1)
+                    await this.animateHandTileToNewPositionAsync(tileDiv, i < index ? i : i + 1, tileDivs.length + 1, solo);
                 }),
             );
         },
@@ -2310,18 +2384,18 @@ function (dojo, declare,
             srcDiv.parentElement.removeChild(srcDiv);
         },
 
-        async animateTileFromDrawPileToMyHandAsync(tileId) {
+        async animateTileFromDrawPileToMyHandAsync(tileId, solo) {
             this.updateDrawPile();
 
             const srcDiv = this.createTileOnDrawPile(tileId);
             srcDiv.id = `fled_temp-tile-${tileId}`;
 
-            const handDiv = document.getElementById(`fled_player-${this.myPlayerId}-hand`);
+            const handDiv = document.getElementById(solo ? `fled_solo-hand` : `fled_player-${this.myPlayerId}-hand`);
             const handSlots = Array.from(handDiv.children);
             const handSlotIndex = handSlots.length;
-            const { deg } = PlayerHandSlots[handSlots.length + 1][handSlotIndex];
+            const { deg } = (solo ? SoloHandSlots : PlayerHandSlots)[handSlots.length + 1][handSlotIndex];
 
-            const tileDiv = this.createTileInHand(handSlotIndex, handSlots.length + 1, tileId, true);
+            const tileDiv = this.createTileInHand(handSlotIndex, handSlots.length + 1, tileId, true, solo);
 
             const srcRect = srcDiv.getBoundingClientRect();
             const destRect = tileDiv.getBoundingClientRect();
@@ -2371,13 +2445,13 @@ function (dojo, declare,
             boardContainerDiv.style.zIndex = 0;
         },
 
-        async animateDiscardHandTileAsync(tileId) {
+        async animateDiscardHandTileAsync(tileId, isSpecter) {
             const tileDiv = this.getTileDiv(tileId);
             if (!tileDiv) return;
 
             const handSlots = Array.from(tileDiv.parentElement.children);
             const handSlotIndex = handSlots.findIndex(div => div === tileDiv);
-            const { x, y } = PlayerHandSlots[handSlots.length][handSlotIndex];
+            const { x, y } = (isSpecter ? SoloHandSlots : PlayerHandSlots)[handSlots.length][handSlotIndex];
 
             // There was no discard pile when this was first written.
             // But rather than change this code, will just create a
@@ -2398,7 +2472,7 @@ function (dojo, declare,
 
             this.updateDiscardPile();
 
-            await this.animateCloseGapInHandAsync();
+            await this.animateCloseGapInHandAsync(isSpecter);
         },
 
         async animateDiscardInventoryTileAsync(playerId, tileId) {
@@ -2425,25 +2499,25 @@ function (dojo, declare,
             this.updateDiscardPile();
         },
 
-        async animateTileFromBoardBackToHandAsync() {
+        async animateTileFromBoardBackToHandAsync(solo = false) {
             const { movesIndex, movesAtSelectedCoords } = this.clientStateArgs;
             const [ tileId, , , orientation ] = movesAtSelectedCoords[movesIndex];
 
             const srcDiv = this.getTileDiv(tileId);
             srcDiv.id = `fled_temp-tile-${tileId}`;
 
-            const handDiv = document.getElementById(`fled_player-${this.myPlayerId}-hand`);
+            const handDiv = document.getElementById(solo ? `fled_solo-hand` : `fled_player-${this.myPlayerId}-hand`);
             const handSlots = Array.from(handDiv.children);
-            const handSlotIndex = fled.myHand.findIndex(t => t == tileId);
-            const handSlot = PlayerHandSlots[handSlots.length + 1][handSlotIndex];
+            const handSlotIndex = (solo ? fled.data.specterHand : fled.myHand).findIndex(t => t == tileId);
+            const handSlot = (solo ? SoloHandSlots : PlayerHandSlots)[handSlots.length + 1][handSlotIndex];
 
-            await this.animateHandToMakeRoomForNewTileAsync(handSlotIndex);
+            await this.animateHandToMakeRoomForNewTileAsync(handSlotIndex, solo);
             
             const srcRect = srcDiv.getBoundingClientRect();
             const srcMidX = Math.round(srcRect.x + srcRect.width / 2);
             const srcMidY = Math.round(srcRect.y + srcRect.height / 2);
 
-            const destDiv = this.createTileInHand(handSlotIndex, handSlots.length + 1, tileId, true);
+            const destDiv = this.createTileInHand(handSlotIndex, handSlots.length + 1, tileId, true, solo);
             const destRect = destDiv.getBoundingClientRect();
             const destMidX = Math.round(destRect.x + destRect.width / 2);
             const destMidY = Math.round(destRect.y + destRect.height / 2);
@@ -2639,7 +2713,7 @@ function (dojo, declare,
             ]);
         },
 
-        async animateTileFromHandToGovernorInventoryAsync(tileId) {
+        async animateTileFromHandToGovernorInventoryAsync(tileId, solo) {
             const tileDiv = this.getTileDiv(tileId);
             if (!tileDiv) {
                 return;
@@ -2647,7 +2721,7 @@ function (dojo, declare,
 
             const handSlots = Array.from(tileDiv.parentElement.children);
             const handSlotIndex = handSlots.findIndex(div => div === tileDiv);
-            const { x, y } = PlayerHandSlots[handSlots.length][handSlotIndex];
+            const { x, y } = (solo ? SoloHandSlots : PlayerHandSlots)[handSlots.length][handSlotIndex];
 
             tileDiv.id = `fled_temp-tile-${tileId}`;
             this.raiseElement(tileDiv);
@@ -2681,7 +2755,7 @@ function (dojo, declare,
 
                 const closeGapPromise = (async () => {
                     await this.delayAsync(ShortDuration);
-                    await this.animateCloseGapInHandAsync();
+                    await this.animateCloseGapInHandAsync(solo);
                 })();
 
                 await Promise.all([
@@ -2697,18 +2771,18 @@ function (dojo, declare,
             tileDiv.parentElement.removeChild(tileDiv);
         },
 
-        async animateCloseGapInHandAsync() {
-            const handDiv = document.getElementById(`fled_player-${this.myPlayerId}-hand`);
+        async animateCloseGapInHandAsync(solo = false) {
+            const handDiv = document.getElementById(solo ? `fled_solo-hand` : `fled_player-${this.myPlayerId}-hand`);
             const tileDivs = Array.from(handDiv.children);
             await Promise.all(
                 tileDivs.map(async (tileDiv, i) => {
-                    await this.animateHandTileToNewPositionAsync(tileDiv, i, tileDivs.length)
+                    await this.animateHandTileToNewPositionAsync(tileDiv, i, tileDivs.length, solo);
                 }),
             );
         },
 
-        async animateHandTileToNewPositionAsync(tileDiv, tileIndex, tileCount) {
-            const { x, y, deg } = PlayerHandSlots[tileCount][tileIndex];
+        async animateHandTileToNewPositionAsync(tileDiv, tileIndex, tileCount, solo = false) {
+            const { x, y, deg } = (solo ? SoloHandSlots : PlayerHandSlots)[tileCount][tileIndex];
 
             const newTransform = `translate(${x}em, ${y}em) rotateZ(${deg}deg)`;
             if (!this.instantaneousMode) {
@@ -2723,9 +2797,63 @@ function (dojo, declare,
                     fill: 'forwards',
                 }).finished;
             }
+            tileDiv.style.transform = newTransform;
+        },
 
-            // Don't trust fill: forwards because it seems a little too permanent / difficult to remove
-            // and .commitStyles() didn't seem to do anything.
+        moveHandToTheLeft() {
+            const handDiv = document.getElementById(`fled_player-${this.myPlayerId}-hand`);
+            const tileDivs = Array.from(handDiv.children);
+            tileDivs.map((tileDiv, i) => {
+                const leftSlot = LeftSideHandSlots[tileDivs.length][i];
+                this.moveHandTileToSlot(tileDiv, leftSlot);
+            });
+        },
+
+        moveHandTileToSlot(tileDiv, { x, y, deg }) {
+            const newTransform = `translate(${x}em, ${y}em) rotateZ(${deg}deg)`;
+            tileDiv.style.transform = newTransform;
+        },
+
+        async animateHandToTheLeftAsync(speed = 'fast') {
+            const handDiv = document.getElementById(`fled_player-${this.myPlayerId}-hand`);
+            const tileDivs = Array.from(handDiv.children);
+            await Promise.all(
+                tileDivs.map(async (tileDiv, i) => {
+                    const leftSlot = LeftSideHandSlots[tileDivs.length][i];
+                    if (speed != 'instant') {
+                        await this.delayAsync(i * 10);
+                    }
+                    await this.animateHandTileToSlotAsync(tileDiv, leftSlot, speed);
+                }),
+            );
+        },
+
+        async animateHandToTheRightAsync(speed = 'fast') {
+            const handDiv = document.getElementById(`fled_player-${this.myPlayerId}-hand`);
+            const tileDivs = Array.from(handDiv.children);
+            await Promise.all(
+                tileDivs.map(async (tileDiv, i) => {
+                    const slot = PlayerHandSlots[tileDivs.length][i];
+                    await this.delayAsync((tileDivs.length - i - 1) * 10);
+                    await this.animateHandTileToSlotAsync(tileDiv, slot, speed);
+                }),
+            );
+        },
+
+        async animateHandTileToSlotAsync(tileDiv, { x, y, deg }, speed) {
+            const newTransform = `translate(${x}em, ${y}em) rotateZ(${deg}deg)`;
+            if (!this.instantaneousMode && speed != 'instant') {
+                await tileDiv.animate({
+                    transform: [
+                        tileDiv.style.transform,
+                        newTransform,
+                    ],
+                }, {
+                    duration: speed == 'fast' ? ReactionDuration : ShortDuration,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
+            }
             tileDiv.style.transform = newTransform;
         },
 
@@ -2771,12 +2899,12 @@ function (dojo, declare,
             this.placeInElement(tileDiv, destDiv);
         },
 
-        async animateTileFromHandToBoardAsync(tileId, x, y, orientation) {
+        async animateTileFromHandToBoardAsync(tileId, x, y, orientation, isSpecter) {
             const tileDiv = this.getTileDiv(tileId);
 
             const handSlots = Array.from(tileDiv.parentElement.children);
             const handSlotIndex = handSlots.findIndex(div => div === tileDiv);
-            const handSlot = PlayerHandSlots[handSlots.length][handSlotIndex];
+            const handSlot = (isSpecter ? SoloHandSlots : PlayerHandSlots)[handSlots.length][handSlotIndex];
             
             const srcDiv = tileDiv;
             this.raiseElement(srcDiv);
@@ -2823,7 +2951,7 @@ function (dojo, declare,
             // Delete the original
             srcDiv.parentElement.removeChild(srcDiv);
 
-            await this.animateCloseGapInHandAsync();
+            await this.animateCloseGapInHandAsync(isSpecter);
         },
 
         async animateOpponentTileToBoardAsync(playerId, tileId, x, y, orientation) {
@@ -3166,13 +3294,23 @@ function (dojo, declare,
             switch (this.currentState) {
                 case 'addTile':
                 case 'addStarterTile':
+                    this.animateSmartZoomAsync({ force: true });
                     this.createSlotsForLegalMoves(tileId);
                     this.setClientState('client_selectSlot', {
                         descriptionmyturn: _('${you} must place the tile on the board'),
                     });
                     break;
 
+                case 'addGhostTile':
+                    this.animateSmartZoomAsync({ force: true });
+                    this.createSlotsForLegalMoves(tileId);
+                    this.setClientState('client_selectSpecterSlot', {
+                        descriptionmyturn: _('${you} must place the tile on the board'),
+                    });
+                    break;
+
                 case 'client_selectSlot':
+                case 'client_selectSpecterSlot':
                     this.createSlotsForLegalMoves(tileId);
                     break;
 
@@ -3185,6 +3323,24 @@ function (dojo, declare,
                     });
                     break;
 
+                case 'discardGhostTile':
+                    this.askConfirmationOrInvoke({
+                        state: 'client_confirmDiscard',
+                        prompt: _('${you} will discard this tile'),
+                        pref: Preference.ConfirmWhenDiscarding,
+                        bypass: this.onClickConfirmDiscard,
+                    });
+                    break;
+    
+                case 'client_surrenderGhostTile':
+                    this.askConfirmationOrInvoke({
+                        state: 'client_confirmSurrender',
+                        prompt: _('${you} will surrender this tile'),
+                        pref: Preference.ConfirmWhenSurrenderingTile,
+                        bypass: this.onClickConfirmSurrender,
+                    });
+                    break;
+    
                 case 'client_selectTileForMovement':
                     if (isWhistleTile(tileId)) {
                         if (fled.getOption('specterExpansion') && fled.isSpecterInPlay) {
@@ -3453,6 +3609,8 @@ function (dojo, declare,
                 return a[3] - b[3];
             });            
 
+            const solo = this.currentState === 'client_selectSpecterSlot';
+
             const bestMove = bestMatchingMoves[0];
             this.clientStateArgs.orientation = bestMove[3];
 
@@ -3480,7 +3638,7 @@ function (dojo, declare,
             else {
                 this.makeTilesNonSelectable();
                 this.clientStateArgs.alreadyPlaced = true;
-                await this.animateTileFromHandToBoardAsync(tileId, bestMove[1], bestMove[2], bestMove[3]);
+                await this.animateTileFromHandToBoardAsync(tileId, bestMove[1], bestMove[2], bestMove[3], solo);
                 const tileDiv = this.getTileDiv(tileId);
                 tileDiv.classList.add('fled_tentative');
                 this.deselectAllTiles();
@@ -3492,7 +3650,7 @@ function (dojo, declare,
             this.clientStateArgs.selectedCoords = { x, y };
 
             // TODO: allow timed confirmation?
-            this.setClientState('client_confirmTilePlacement', {
+            this.setClientState(solo ? 'client_confirmSpecterTilePlacement' : 'client_confirmTilePlacement', {
                 descriptionmyturn: _('${you} must confirm the tile placement'),
             });
         },
@@ -3552,7 +3710,8 @@ function (dojo, declare,
         async onClickConfirmDiscard() {
             console.log('onClickConfirmDiscard()');
             const t = this.clientStateArgs.selectedTileId;
-            await invokeServerActionAsync('discard', fled.moveNumber, { t });
+            const s = this.currentState === 'discardGhostTile' ? 1 : undefined;
+            await invokeServerActionAsync('discard', fled.moveNumber, { t, s });
             // TODO: lock the UI while the above call is happening
         },
 
@@ -3606,7 +3765,8 @@ function (dojo, declare,
             this.deselectAllTiles();
 
             if (this.clientStateArgs.alreadyPlaced) {
-                await this.animateTileFromBoardBackToHandAsync();
+                const solo = this.currentState === 'client_confirmSpecterTilePlacement';
+                await this.animateTileFromBoardBackToHandAsync(solo);
                 this.clientStateArgs.alreadyPlaced = false;
             }
 
@@ -3768,7 +3928,8 @@ function (dojo, declare,
 
             this.makeTilesNonSelectable();
 
-            await invokeServerActionAsync('surrender', fled.moveNumber, { t });
+            const s = this.currentState === 'client_surrenderGhostTile' ? 1 : undefined;
+            await invokeServerActionAsync('surrender', fled.moveNumber, { t, s });
             // TODO: lock the UI while the above call is happening
 
             delete this.clientStateArgs.selectedTileId;
@@ -3939,6 +4100,11 @@ function (dojo, declare,
             }
         },
 
+        async notify_specterTileDiscarded({ tile: tileId }) {
+            fled.removeTileFromHand(null, tileId);
+            await this.animateDiscardHandTileAsync(tileId, true);
+        },
+
         async notify_inventoryDiscarded({ playerId, tileIds, score }) {
             for (const tileId of tileIds) {
                 fled.removeTileFromInventory(playerId, tileId);
@@ -3966,11 +4132,11 @@ function (dojo, declare,
 
             // Current player has already had the tile animated to the board
             // (unless we're in archive mode!)
-            if (playerId == this.myPlayerId) {
+            if (playerId == this.myPlayerId || !playerId) {
                 this.destroyRotateButton();
 
                 if (g_archive_mode) {
-                    await this.animateTileFromHandToBoardAsync(tileId, x, y, orientation);
+                    await this.animateTileFromHandToBoardAsync(tileId, x, y, orientation, !!playerId);
                 }
             }
             else {
@@ -4022,6 +4188,9 @@ function (dojo, declare,
             if (playerId == this.myPlayerId) {
                 await this.animateTileFromHandToGovernorInventoryAsync(tileId);
             }
+            else if (!playerId) {
+                await this.animateTileFromHandToGovernorInventoryAsync(tileId, true);
+            }
             else {
                 // TODO: put a small animation here... fade in, perhaps?
                 this.createTileInGovernorInventory(tileId);
@@ -4043,7 +4212,9 @@ function (dojo, declare,
         },
 
         async notify_tilesDrawn({ playerId, n }) {
-            if (playerId != this.myPlayerId) {
+            // If another player or the Specter draw cards,
+            // just do the accounting but no animations
+            if (playerId && playerId != this.myPlayerId) {
                 for (let i = 0; i < n; i++) {
                     fled.removeFromDrawPile();
                     fled.addTileToHand(playerId, 0);
@@ -4052,12 +4223,11 @@ function (dojo, declare,
             }
         },
 
-        async notify_tilesReceived({ tileIds }) {
+        async notify_tilesReceived({ tileIds, s: specter }) {
             for (const tileId of tileIds) {
-                fled.drawTile(this.myPlayerId, tileId);
-
-                await this.animateDrawTileAsync(this.myPlayerId, tileId);
+                await this.animateDrawTileAsync(this.myPlayerId, tileId, specter);
                 await this.delayAsync(100);
+                fled.drawTile(specter ? null : this.myPlayerId, tileId);
             }
         },
 
@@ -4091,7 +4261,7 @@ function (dojo, declare,
         },
 
         async notify_playerMovedNpc({ playerId, x, y, npc: npcName, needMove2 }) {
-            fled.moveNpc(playerId, npcName, x, y);
+            fled.moveNpc(npcName, x, y);
 
             this.makeMeeplesNonSelectable();
             this.deselectAll();
@@ -4102,6 +4272,15 @@ function (dojo, declare,
                 fled.needMove2 = needMove2;
                 this.setClientStateForSecondMove();
             }
+        },
+
+        async notify_specterMovedNpc({ x, y, npc: npcName }) {
+            fled.moveNpc(npcName, x, y);
+
+            this.makeMeeplesNonSelectable();
+            this.deselectAll();
+
+            await this.animateNpcMoveAsync(npcName, x, y);
         },
 
         async notify_missedTurn({ playerId }) {
@@ -4244,6 +4423,32 @@ function (dojo, declare,
 
         async notify_turnEnded() {
             fled.endTurn();
-        }
+        },
+
+        async notify_spectersTurn() {
+            fled.spectersTurn = true;
+            this.setClientState('client_spectersTurn', {
+                descriptionmyturn: _("It's the Specter's turn"),
+            });
+            await Promise.all([
+                this.delayAsync(800),
+                this.animateHandToTheLeftAsync('normal'),
+            ]);
+        },
+
+        async notify_endSpectersTurn() {
+            fled.spectersTurn = false;
+            this.setClientState('client_endSpectersTurn', {
+                descriptionmyturn: _("It's your turn"),
+            });
+            await Promise.all([
+                this.delayAsync(800),
+                this.animateHandToTheRightAsync('normal'),
+            ]);
+        },
+
+        async notify_lostSoloGame() {
+            this.scoreCounter[this.myPlayerId].setValue(0);
+        },
     });
 });

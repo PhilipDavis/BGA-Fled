@@ -38,5 +38,21 @@
             }
         ],
         "default": 1
+    },
+    "102": {
+        "name": "Expansion: The Specter (Solo Mode)",
+        "values": {
+            "2": {
+                "name": "yes",
+                "tmdisplay": "The haunted corridors of Spike Island prison are no place to roam at night. But brave them you must, lest You remain in captivity -- forever!"
+            }
+        },
+        "displaycondition": [
+            {
+                "type": "maxplayers",
+                "value": 1
+            }
+        ],
+        "default": 2
     }
 }

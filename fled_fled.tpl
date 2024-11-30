@@ -68,6 +68,9 @@ const fled_Templates = {
             '</div>' +
         '</div>',
 
+    soloHand:
+        '<div id="fled_solo-hand"></div>',
+
     refTileZone:
         '<div id="fled_ref-tile-${PID}-zone-${INDEX}" class="fled_zone fled_ref-tile-zone-${INDEX}"></div>',
 

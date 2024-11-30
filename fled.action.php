@@ -68,7 +68,8 @@ class action_fled extends APP_GameAction
         $this->setAjaxMode();
         
         $tileId = intval($this->getArg('t', AT_posint, true));
-        $this->game->action_discard($tileId);
+        $specter = $this->getArg('s', AT_num, false, null) != null;
+        $this->game->action_discard($tileId, $specter);
 
         $this->ajaxResponse();
     }
@@ -115,7 +116,8 @@ class action_fled extends APP_GameAction
         $this->setAjaxMode();
         
         $tileId = intval($this->getArg('t', AT_posint, true));
-        $this->game->action_surrender($tileId);
+        $specter = $this->getArg('s', AT_num, false, null) != null;
+        $this->game->action_surrender($tileId, $specter);
 
         $this->ajaxResponse();
     }

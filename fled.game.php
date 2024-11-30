@@ -26,6 +26,7 @@ class Fled extends Table implements FledEvents
             // Game Options
             FLED_OPT_HOUND => FLED_OPT_HOUND,
             FLED_OPT_SPECTER => FLED_OPT_SPECTER,
+            FLED_OPT_SPECTER_SOLO => FLED_OPT_SPECTER_SOLO,
         ]);
 
         $this->fled = null;
@@ -114,8 +115,11 @@ class Fled extends Table implements FledEvents
  
 
         $fledOptions = [
-            'specterExpansion' => $this->getGameStateValue(FLED_OPT_SPECTER) == FLED_OPT_SPECTER_YES,
-            'houndExpansion' => $this->getGameStateValue(FLED_OPT_HOUND) == FLED_OPT_HOUND_YES,
+            'specterExpansion' =>
+                $this->getGameStateValue(FLED_OPT_SPECTER) == FLED_OPT_SPECTER_YES ||
+                $this->getGameStateValue(FLED_OPT_SPECTER_SOLO) == FLED_OPT_SPECTER_SOLO_YES,
+            'houndExpansion' =>
+                $this->getGameStateValue(FLED_OPT_HOUND) == FLED_OPT_HOUND_YES,
         ];
         
         $fled = FledLogic::newGame($playerColorIndices, $fledOptions, $this);
@@ -261,8 +265,9 @@ class Fled extends Table implements FledEvents
 
     //
     // When Player has no legal tiles to add to the prison, they must discard.
+    // Also used in Solo mode to discard a card from the Specter's hand.
     //
-    function action_discard($tileId)
+    function action_discard($tileId, bool $specter)
     {
         $playerId = $this->validateCaller();
 
@@ -270,7 +275,7 @@ class Fled extends Table implements FledEvents
         $stateBefore = $fled->toJson();
         try
         {
-            $fled->discardTile($tileId);
+            $fled->discardTile($tileId, $specter);
         }
         catch (Throwable $e)
         {
@@ -278,7 +283,7 @@ class Fled extends Table implements FledEvents
             $this->error(implode(', ', [
                 'Ref #' . $refId . ': discard failed',
                 'player: ' . $playerId,
-                'inputs: ' . json_encode([ $tileId ]),
+                'inputs: ' . json_encode([ $tileId, $specter ]),
                 'state: ' . $stateBefore,
                 'ex:' . $e,
             ]));
@@ -287,7 +292,8 @@ class Fled extends Table implements FledEvents
         $this->saveGameState($fled);
 
         $this->giveExtraTime($playerId);
-        $this->gamestate->nextState('nextPhase');
+        if (!$specter)
+            $this->gamestate->nextState('nextPhase');
     }
 
     function onUnableToAddTile($playerId)
@@ -316,29 +322,18 @@ class Fled extends Table implements FledEvents
             ]);
             return;
         }
+    }
 
-        //
-        // Send notifications to players
-        //
-        foreach ($this->players as $playerId => $player)
-        {
-            if ($playerId == $activePlayerId)
-            {
-                $this->notifyPlayer($playerId, 'tileDiscarded', clienttranslate('${playerName} discards a tile'), [
-                    'playerName' => $this->getPlayerNameById($playerId),
-                    'playerId' => $activePlayerId,
-                    'tile' => $tileId,
-                    'preserve' => [ 'tile' ],
-                ]);
-            }
-            else
-            {
-                $this->notifyPlayer($playerId, 'tileDiscarded', clienttranslate('${playerName} discards a tile'), [
-                    'playerName' => $this->getPlayerNameById($playerId),
-                    'playerId' => $activePlayerId,
-                ]);
-            }
-        }
+    function onSpecterTileDiscarded($tileId)
+    {
+        $tile = FledLogic::$FledTiles[$tileId];
+        $itemId = $tile['contains'];
+        $this->notifyAllPlayers('specterTileDiscarded', clienttranslate('The Specter discards ${_tile}'), [
+            'i18n' => [ '_tile' ],
+            '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
+            'tile' => $tileId,
+            'preserve' => [ 'tile' ],
+        ]);
     }
 
     function action_placeTile($tileId, $x, $y, $orientation)
@@ -404,6 +399,22 @@ class Fled extends Table implements FledEvents
         $this->notifyAllPlayers('tilePlaced', clienttranslate('${playerName} adds a tile to the prison'), [
             'playerName' => $this->getPlayerNameById($playerId),
             'playerId' => $playerId,
+            'tile' => $tileId,
+            'x' => $x,
+            'y' => $y,
+            'o' => $orientation,
+        ]);
+    }
+
+    function onSpecterTilePlaced($tileId, $x, $y, $orientation)
+    {
+        $this->incStat(1, 'prison_size');
+
+        //
+        // Send notifications to players
+        //
+        $this->notifyAllPlayers('tilePlaced', clienttranslate('${playerName} adds a tile to the prison'), [
+            'playerName' => clienttranslate('The Specter'),
             'tile' => $tileId,
             'x' => $x,
             'y' => $y,
@@ -596,6 +607,36 @@ class Fled extends Table implements FledEvents
         ]);
     }
 
+    function onSpecterMovedNpc(bool $playerTargeted, $x, $y, $npcName, $path)
+    {
+        //
+        // Update stats
+        //
+        $distance = count($path) - 1;
+        if (FledLogic::isWarder($npcName))
+            $this->incStat($distance, 'warder_distance');
+        else if ($npcName == FLED_NPC_SPECTER)
+            $this->incStat($distance, 'specter_distance');
+
+        //
+        // Notify Players
+        //
+        $msg =
+            $playerTargeted
+                ? clienttranslate('The Specter moves ${_npc} to ${targetName} at (${x}, ${y})')
+                : clienttranslate('The Specter moves ${_npc} to (${x}, ${y})');
+
+        $this->notifyAllPlayers('specterMovedNpc', $msg, [
+            'i18n' => [ '_npc' ],
+            '_npc' => $this->NpcTypes[$npcName]['the'],
+            'targetName' => $playerTargeted ? $this->getPlayerNameById($this->fled->getNextPlayerId()) : null,
+            'npc' => $npcName,
+            'x' => $x,
+            'y' => $y,
+            'preserve' => [ 'npc' ],
+        ]);
+    }
+
     function onPlayerShackled($activePlayerId, $targetPlayerId, $shackleTile, $score, $auxScore)
     {
         $this->incStat(1, 'shackled', $targetPlayerId);
@@ -748,7 +789,7 @@ class Fled extends Table implements FledEvents
         ]);
     }
 
-    function action_surrender($tileId)
+    function action_surrender($tileId, $specter)
     {
         $playerId = $this->validateCaller();
 
@@ -756,7 +797,7 @@ class Fled extends Table implements FledEvents
         $stateBefore = $fled->toJson();
         try
         {
-            $fled->surrenderTile($tileId);
+            $fled->surrenderTile($tileId, $specter);
         }
         catch (Throwable $e)
         {
@@ -764,7 +805,7 @@ class Fled extends Table implements FledEvents
             $this->error(implode(', ', [
                 'Ref #' . $refId . ': surrender failed',
                 'player: ' . $playerId,
-                'inputs: ' . json_encode([ $tileId ]),
+                'inputs: ' . json_encode([ $tileId, $specter ]),
                 'state: ' . $stateBefore,
                 'ex:' . $e,
             ]));
@@ -772,6 +813,16 @@ class Fled extends Table implements FledEvents
         }
 
         $this->saveGameState($fled);
+
+        // Solo player was unable to add a tile, so it had to be surrendered.
+        // Advance to the Discard phase. Note, this action is not called when
+        // the final Specter tile is surrendered. (that happens automatically
+        // as part of the discard logic)
+        if ($specter)
+        {
+            $this->giveExtraTime($playerId);
+            $this->gamestate->nextState('nextPhase');
+        }
     }
 
     function onTileSurrendered($activePlayerId, $tileId)
@@ -792,6 +843,19 @@ class Fled extends Table implements FledEvents
             '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
             'playerName' => $this->getPlayerNameById($activePlayerId),
             'playerId' => $activePlayerId,
+            'tile' => $tileId,
+            'preserve' => [ 'tile' ],
+        ]);
+    }
+
+    function onSpecterTileSurrendered($tileId)
+    {
+        $tile = FledLogic::$FledTiles[$tileId];
+        $itemId = $tile['contains'];
+        $this->notifyAllPlayers('tileSurrendered', clienttranslate('${playerName} surrenders ${_tile} to the Governor'), [
+            'i18n' => [ '_tile' ],
+            '_tile' => $tile['color'] === FLED_COLOR_GOLD ? $this->Items[$itemId]['double'] : $this->Items[$itemId]['one'],
+            'playerName' => clienttranslate('The Specter'),
             'tile' => $tileId,
             'preserve' => [ 'tile' ],
         ]);
@@ -863,8 +927,39 @@ class Fled extends Table implements FledEvents
             'score' => $score,
         ]);
 
+        if ($this->fled->isSoloGame())
+        {
+            if ($score == 5) // Note: 5 is minimum possible score for escaping
+                $soloRating = clienttranslate('5 VP: Awfully average');
+            else if ($score <= 8)
+                $soloRating = clienttranslate('6 - 8 VP: Dreadfully decent');
+            else if ($score <= 11)
+                $soloRating = clienttranslate('9 - 11 VP: Ghoulishly great');
+            else if ($score <= 14)
+                $soloRating = clienttranslate('12 - 14 VP: Frighteningly fantastic');
+            else if ($score >= 15)
+                $soloRating = clienttranslate('15+ VP: Eerily exalted');
+
+            $this->notifyAllPlayers('wonSoloGame', $soloRating, []);
+        }
+
         // Skip the draw phase and immediately go to the next player.
         // Everyone else gets one more turn.
+        $this->gamestate->nextState('nextTurn');
+    }
+
+    public function onLostSoloGame(string $reason)
+    {
+        $messages = [
+            FLED_SOLO_LOSS_REPLENISH => clienttranslate('<b>Game over</b>: Unable to draw cards'),
+            FLED_SOLO_LOSS_SPECTER => clienttranslate('<b>Game over</b>: The Ghost meeple reached the prisoner'),
+            FLED_SOLO_LOSS_WHISTLE => clienttranslate("<b>Game over</b>: The Whistle traveled back to the Governor's roll call tile"),
+        ];
+
+        $this->setPlayerScore($this->fled->getNextPlayerId(), 0, 0);
+
+        $this->notifyAllPlayers('lostSoloGame', $messages[$reason], []);
+
         $this->gamestate->nextState('nextTurn');
     }
 
@@ -919,7 +1014,7 @@ class Fled extends Table implements FledEvents
         ]);
     }
 
-    function onTilesDrawn($activePlayerId, $drawnBeforeShuffle, $drawnAfterShuffle, $drawPileSize)
+    function onTilesDrawn($activePlayerId, array $drawnBeforeShuffle, array $drawnAfterShuffle, int $drawPileSize, bool $isSpecter)
     {
         if (count($drawnBeforeShuffle))
         {
@@ -929,13 +1024,20 @@ class Fled extends Table implements FledEvents
                     : clienttranslate('${playerName} draws ${n} tiles');
 
             $this->notifyAllPlayers('tilesDrawn', $logMessage, [
-                'playerName' => $this->getPlayerNameById($activePlayerId),
-                'playerId' => $activePlayerId,
+                'playerName' =>
+                    $isSpecter
+                        ? clienttranslate('The Specter')
+                        : $this->getPlayerNameById($activePlayerId),
+                'playerId' =>
+                    $isSpecter
+                        ? null
+                        : $activePlayerId,
                 'n' => count($drawnBeforeShuffle),
             ]);
 
             $this->notifyPlayer($activePlayerId, 'tilesReceived', '', [
                 'tileIds' => $drawnBeforeShuffle,
+                's' => $isSpecter,
             ]);
         }
 
@@ -954,13 +1056,20 @@ class Fled extends Table implements FledEvents
                     );
 
             $this->notifyAllPlayers('tilesDrawn', $logMessage, [
-                'playerName' => $this->getPlayerNameById($activePlayerId),
-                'playerId' => $activePlayerId,
+                'playerName' =>
+                    $isSpecter
+                        ? clienttranslate('The Specter')
+                        : $this->getPlayerNameById($activePlayerId),
+                'playerId' =>
+                    $isSpecter
+                        ? null
+                        : $activePlayerId,
                 'n' => count($drawnAfterShuffle),
             ]);
 
             $this->notifyPlayer($activePlayerId, 'tilesReceived', '', [
                 'tileIds' => $drawnAfterShuffle,
+                's' => $isSpecter,
             ]);
         }
     }
@@ -1042,6 +1151,17 @@ class Fled extends Table implements FledEvents
         $this->notifyAllPlayers('endTurn', '', []);
     }
 
+    function onEndSpectersTurn()
+    {
+        $this->notifyAllPlayers('endSpectersTurn', '', []);
+        $this->gamestate->nextState('nextTurn');
+    }
+
+    function onSpectersTurn()
+    {
+        $this->notifyAllPlayers('spectersTurn', '', []);
+    }
+
     
 //////////////////////////////////////////////////////////////////////////////
 //////////// Game state arguments
@@ -1080,7 +1200,12 @@ class Fled extends Table implements FledEvents
         $this->gamestate->changeActivePlayer($playerId);
 
         if ($fled->isGameSetup())
-            $this->gamestate->nextState('nextTurn');
+        {
+            if ($fled->isSpectersTurn())
+                $this->gamestate->nextState('ghostTurn');
+            else
+                $this->gamestate->nextState('nextTurn');
+        }
         else
             $this->gamestate->nextState('nextStarterTurn');
     }
@@ -1169,7 +1294,7 @@ class Fled extends Table implements FledEvents
                 $handTiles = $fled->getHandTilesEligibleForSurrender();
                 $index = rand(0, count($handTiles) - 1);
                 $surrenderTile = $handTiles[$index];
-                $fled->surrenderTile($surrenderTile);
+                $fled->surrenderTile($surrenderTile, false);
                 break;
 
             case STATE_DRAW_TILES:
@@ -1177,6 +1302,8 @@ class Fled extends Table implements FledEvents
                 break;
         }
         $this->saveGameState($fled);
+
+        $this->gamestate->nextState('nextTurn');
     }
 
     

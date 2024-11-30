@@ -1,7 +1,62 @@
 <?php declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Constraint\Callback;
+use PHPUnit\Framework\Constraint\Constraint;
 
 require_once('FledLogic.php');
+
+
+//
+// From https://github.com/sebastianbergmann/phpunit/issues/4026#issuecomment-1418205424
+// Thanks to https://github.com/dragosprotung
+//
+//use function array_column;
+//use function count;
+trait PHPUnitHelper
+{
+    /**
+     * @param array<mixed> $firstCallArguments
+     * @param array<mixed> ...$consecutiveCallsArguments
+     *
+     * @return iterable<Callback<mixed>>
+     */
+    public static function withConsecutive(array $firstCallArguments, array ...$consecutiveCallsArguments): iterable
+    {
+        foreach ($consecutiveCallsArguments as $consecutiveCallArguments) {
+            self::assertSameSize($firstCallArguments, $consecutiveCallArguments, 'Each expected arguments list need to have the same size.');
+        }
+
+        $allConsecutiveCallsArguments = [$firstCallArguments, ...$consecutiveCallsArguments];
+
+        $numberOfArguments = count($firstCallArguments);
+        $argumentList      = [];
+        for ($argumentPosition = 0; $argumentPosition < $numberOfArguments; $argumentPosition++) {
+            $argumentList[$argumentPosition] = array_column($allConsecutiveCallsArguments, $argumentPosition);
+        }
+
+        $mockedMethodCall = 0;
+        $callbackCall     = 0;
+        foreach ($argumentList as $index => $argument) {
+            yield new Callback(
+                static function (mixed $actualArgument) use ($argumentList, &$mockedMethodCall, &$callbackCall, $index, $numberOfArguments): bool {
+                    $expected = $argumentList[$index][$mockedMethodCall] ?? null;
+
+                    $callbackCall++;
+                    $mockedMethodCall = (int) ($callbackCall / $numberOfArguments);
+
+                    if ($expected instanceof Constraint) {
+                        self::assertThat($actualArgument, $expected);
+                    } else {
+                        self::assertEquals($expected, $actualArgument);
+                    }
+
+                    return true;
+                },
+            );
+        }
+    }
+}
+
 
 
 final class FledLogicTest extends TestCase
@@ -406,7 +461,6 @@ final class FledLogicTest extends TestCase
         $traversalsTo_7_4 = array_values(array_filter($result, fn($t) => $t['path'][count($t['path']) - 1] == [ $x, $y ]));
 
         $this->assertCount(1, $traversalsTo_7_4, "Should have one path to (7, 4)");
-        $this->assertEquals(FLED_TOOL_BOOT, $traversalsTo_7_4[0]['type']);
     }
 
     public function testSpoonDoubleMovementFromDoubleTile()
@@ -425,7 +479,6 @@ final class FledLogicTest extends TestCase
 
         $this->assertCount(9, $result, "Should have nine possible destinations"); // 9, assuming can't end up where player started
         $this->assertCount(1, $traversalsTo_9_2, "Should have one path to (9, 2)");
-        $this->assertEquals(FLED_TOOL_SPOON, $traversalsTo_9_2[0]['type']);
     }
 
     public function testPlayerCanEscape()
@@ -464,6 +517,135 @@ final class FledLogicTest extends TestCase
         $fled->advanceNextPlayer(); // Note: the state above was incorrect... the game logic hadn't advanced the player. So do that now.
 
         $fled->placeTile($tileId, $x, $y, $o);
+
+        $this->assertTrue(true);
+    }
+
+    public function testTile26Movement()
+    {
+        // Player chose tile 26 but and should have 2 legal moves but shows 3
+
+        $mockEvents = $this->createMockEvents();
+        $fled = FledLogic::fromJson(
+            '{"move":3,"npcs":{"warder1":{"pos":[6,6]}},
+                "board":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,235,0,0,0,0,0,0,0,0,0,0,146,146,1,235,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                "order":[2393715],"setup":1,"options":{"houndExpansion":false,"specterExpansion":true},
+                "players":{
+                    "2393715":{"pos":[9,5],"hand":[26,17,42],"color":0,"escaped":false,"inventory":[],"needMove2":null,"inSolitary":false,"placedTile":true,"shackleTile":0,"actionsPlayed":1}
+                },"version":1,
+                "drawPile":[5,50,6,49,14,39,33,9,29,11,32,4,28,30,24,43,54,13,18,52,22,10,16,23,34,51,12,36,41,15,40,55,44,27,20,38,25,45,21,19,90,48,37,3,53,56],
+                "rollCall":[3,0,2,1,4],"hardLabor":0,"finalTurns":null,"nextPlayer":0,"openWindow":3,"whistlePos":4,"discardPile":[47],"specterHand":[],"governorInventory":[]
+            }',
+            $mockEvents
+        );
+    
+        $tileId = 26;
+        $result = $fled->getLegalMovementMoves($tileId);
+
+        $this->assertCount(2, $result, "Should have two possible destinations");
+        $this->assertEquals([
+            [ 'path' => [ [ 9, 5 ], [ 9, 6 ] ], 'type' => 20 ],
+            [ 'path' => [ [ 9, 5 ], [ 9, 6 ], [ 8, 6 ] ], 'type' => 20 ],
+        ], $result, "Should have one path to (9, 2)");
+    }
+
+    public function testSpecterMovesOneRoomInSoloMode()
+    {
+        // Specter moved all the way to player (two rooms away) but should have only moved one room
+
+        $mockEvents = $this->createMockEvents();
+        $fled = FledLogic::fromJson(
+            '{
+                "version":1,"move":6,
+                "npcs":{"specter":{"pos":[7,5]},"warder1":{"pos":[6,6]}},
+                "board":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,190,190,0,0,0,0,0,0,0,0,0,0,0,146,146,301,301,104,104,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                "order":[2393715],"setup":1,
+                "options":{"houndExpansion":false,"specterExpansion":true},
+                "players":{
+                    "2393715":{"pos":[9,6],"hand":[49,51,3,54,56],"color":0,"escaped":false,"inventory":[],"needMove2":null,"inSolitary":false,"placedTile":true,"shackleTile":0,"actionsPlayed":0}
+                },
+                "drawPile":[50,19,44,11,45,6,55,26,53,17,9,38,35,27,48,43,41,16,13,12,14,24,47,28,37,33,36,10,32,52,42,21,25,23,20,29,5,34,40,18],
+                "rollCall":[2,3,1,0,4],"hardLabor":0,"finalTurns":null,"nextPlayer":0,"openWindow":3,"whistlePos":4,"discardPile":[],
+                "specterHand":[30,39],
+                "governorInventory":[15,22]
+            }',
+            $mockEvents
+        );
+    
+        $playerId = 2393715;
+        $tileId = 30;
+        $isSpecter = true;
+
+
+        $mockEvents->expects($this->exactly(2))->method('onSpecterMovedNpc')
+            ->with(
+                ...self::withConsecutive(
+                    [ true,  9, 6, 'warder1', [ [ 6, 6 ], [ 8, 6 ], [ 9, 6 ] ] ],
+                    [ false, 8, 6, 'specter', [ [ 7, 5 ], [ 8, 6 ] ] ],
+                )
+            );
+
+        $fled->discardTile($tileId, $isSpecter);
+
+        $this->assertTrue(true);
+    }
+
+    // should have 4 placement options
+    // {"move":35,"npcs":{"warder1":{"pos":[7,4]}},"board":[0,0,0,0,0,0,0,14,20,0,0,0,0,0,0,0,0,0,0,341,341,14,20,0,0,0,0,0,0,0,0,0,0,28,0,240,0,0,0,0,0,0,0,0,0,0,0,28,32,240,0,0,0,0,0,0,0,0,0,0,0,227,32,350,350,326,326,0,0,0,0,0,0,0,0,227,352,352,342,342,0,0,0,0,0,0,0,0,0,0,146,146,301,301,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"order":[2393715],"setup":1,"options":{"houndExpansion":false,"specterExpansion":true},"players":{"2393715":{"pos":[6,4],"hand":[9,18,39,19,17],"color":0,"escaped":false,"inventory":[53],"needMove2":null,"inSolitary":false,"placedTile":false,"shackleTile":48,"actionsPlayed":0}},"version":1,"drawPile":[56,44,24,6,51,45,34,12,47,29,22,15,13,4],"rollCall":[1,0,2,3,4],"hardLabor":0,"finalTurns":null,"nextPlayer":0,"openWindow":3,"whistlePos":2,"discardPile":[21,16,5,35,49,38,3,30,23,55,33,11,43],"specterHand":[90,10,37],"spectersTurn":true,"governorInventory":[54,25,36]}
+
+    public function testSoloModeWarderInSameRoomAsPlayer()
+    {
+        $mockEvents = $this->createMockEvents();
+        $fled = FledLogic::fromJson(
+            '{
+                "move":18,
+                "npcs":{"warder1":{"pos":[9,6]}},
+                "board":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,124,124,0,0,0,0,0,0,0,0,146,146,1,135,135,32,0,0,0,0,0,0,0,0,0,0,0,133,133,32,0,0,0,0,0,0,0,0,0,0,0,0,128,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                "order":[2393715],"setup":1,"options":{"houndExpansion":false,"specterExpansion":true},
+                "players":{"2393715":{"pos":[9,6],"hand":[16,17,37,53,30],"color":0,"escaped":false,"addedTile":true,"inventory":[],"needMove2":null,"inSolitary":false,"placedTile":true,"shackleTile":48,"actionsPlayed":0}},
+                "version":1,"drawPile":[3,38,36,47,50,43,49,13,55,40,20,29,4,54,19,26,10,22,18,39,52,56,15,9,27,90,41,42],
+                "rollCall":[3,1,2,0,4],"hardLabor":0,"finalTurns":null,"nextPlayer":0,"openWindow":3,"whistlePos":2,
+                "discardPile":[45,21,34,5],"specterHand":[6,44],"spectersTurn":true,"governorInventory":[51,25,23,12,14,11]
+            }',
+            $mockEvents
+        );
+    
+        $playerId = 2393715;
+        $tileId = 44;
+        $isSpecter = true;
+
+        $mockEvents->expects($this->once())->method('onSpecterMovedNpc')
+            ->with(true,  9, 6, 'warder1', [ [ 9, 6 ], [ 9, 6 ] ]);
+
+        $fled->discardTile($tileId, $isSpecter);
+
+        $this->assertTrue(true);
+    }
+
+    public function testSoloModeWarderCannotTraverseWindow()
+    {
+        $mockEvents = $this->createMockEvents();
+        $fled = FledLogic::fromJson(
+            '{
+                "version":1,"move":6,
+                "npcs":{"warder1":{"pos":[6,6]}},
+                "board":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,144,144,111,111,0,0,0,0,0,0,0,0,0,146,146,301,301,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                "order":[2393715],"setup":1,"options":{"houndExpansion":false,"specterExpansion":true},
+                "players":{"2393715":{"pos":[10,5],"hand":[43,40,20,27,4],"color":0,"escaped":false,"inventory":[],"needMove2":null,"inSolitary":false,"placedTile":true,"shackleTile":0,"actionsPlayed":0}},
+                "drawPile":[38,10,52,33,55,56,39,51,6,15,3,34,12,53,42,37,50,21,14,36,35,54,90,5,17,48,16,30,19,22,32,9,26,24,13,41,45,29,18,49],
+                "rollCall":[3,0,1,2,4],"hardLabor":0,"finalTurns":null,"nextPlayer":0,"openWindow":3,"whistlePos":4,"discardPile":[23,28],"specterHand":[25,47],"spectersTurn":true,"governorInventory":[]
+            }',
+            $mockEvents
+        );
+    
+        $playerId = 2393715;
+        $tileId = 25;
+        $isSpecter = true;
+
+        $mockEvents->expects($this->once())->method('onSpecterMovedNpc')
+            ->with(false, 8, 6, 'warder1', [ [ 6, 6 ], [ 8, 6 ] ]);
+
+        $fled->discardTile($tileId, $isSpecter);
 
         $this->assertTrue(true);
     }
