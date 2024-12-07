@@ -4140,7 +4140,7 @@ function (dojo, declare,
                 this.destroyRotateButton();
 
                 if (g_archive_mode) {
-                    await this.animateTileFromHandToBoardAsync(tileId, x, y, orientation, !!playerId);
+                    await this.animateTileFromHandToBoardAsync(tileId, x, y, orientation, !playerId);
                 }
             }
             else {
