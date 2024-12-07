@@ -3049,10 +3049,10 @@ function (dojo, declare,
             await this.transitionInAsync(prisonerTileDiv, 'fled_back');
         },
 
-        async animatePlayerMoveAsync(playerId, x, y) {
+        async animatePlayerMoveAsync(playerId, x, y, inSolitary = false) {
             const player = fled.players[playerId];
             const name = MeepleNames[player.color];
-            await this.animateOtherMeeplesToMakeRoomForNewMeepleAsync(name, x, y);
+            await this.animateOtherMeeplesToMakeRoomForNewMeepleAsync(name, x, y, inSolitary);
             await this.animateMeepleMoveAsync(name, x, y);
         },
 
@@ -3088,8 +3088,8 @@ function (dojo, declare,
 
         // Optionally takes an index of where the new meeple will go
         // (defaults to the last position, left to right, top to bottom)
-        async animateOtherMeeplesToMakeRoomForNewMeepleAsync(exceptName, x, y) {
-            const meeples = fled.getMeeplesAt(x, y);
+        async animateOtherMeeplesToMakeRoomForNewMeepleAsync(exceptName, x, y, inSolitary = false) {
+            const meeples = fled.getMeeplesAt(x, y, inSolitary);
             await Promise.all(
                 meeples.map(async name => {
                     if (name === exceptName) return;
