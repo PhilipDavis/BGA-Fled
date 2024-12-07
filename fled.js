@@ -2576,28 +2576,30 @@ function (dojo, declare,
 
             const intermediateAngle = deltaY ? -Math.atan(deltaX / deltaY) / Math.PI * 180 : 0;
 
-            await srcDiv.animate({
-                transform: [
-                    srcDiv.style.transform,
-                    `${srcDiv.style.transform} rotateY(-180deg)`,
-                ],
-            }, {
-                duration: 800,
-                easing: 'ease-out',
-                fill: 'forwards',
-            }).finished;
+            if (!this.instantaneousMode) {
+                await srcDiv.animate({
+                    transform: [
+                        srcDiv.style.transform,
+                        `${srcDiv.style.transform} rotateY(-180deg)`,
+                    ],
+                }, {
+                    duration: 800,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
 
-            await srcDiv.animate({
-                transform: [
-                    `${srcDiv.style.transform} rotateY(-180deg)`,
-                    `translate(${x}em, ${y}em) rotateZ(${intermediateAngle}deg) rotateY(-180deg)`,
-                    `translate(calc(${x}em + ${deltaX}px), calc(${y}em + ${deltaY}px)) rotateZ(0deg) rotateY(-180deg)`,
-                ],
-            }, {
-                duration: 800,
-                easing: 'ease-out',
-                fill: 'forwards',
-            }).finished;
+                await srcDiv.animate({
+                    transform: [
+                        `${srcDiv.style.transform} rotateY(-180deg)`,
+                        `translate(${x}em, ${y}em) rotateZ(${intermediateAngle}deg) rotateY(-180deg)`,
+                        `translate(calc(${x}em + ${deltaX}px), calc(${y}em + ${deltaY}px)) rotateZ(0deg) rotateY(-180deg)`,
+                    ],
+                }, {
+                    duration: 800,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
+            }
 
             tileDiv.classList.add('fled_back');
             tileDiv.id = `fled_tile-shackle-${this.myPlayerId}`;
@@ -2629,30 +2631,32 @@ function (dojo, declare,
 
             this.raiseElement(srcDiv);
 
-            // Flip the tile over first
-            await srcDiv.animate({
-                transform: [
-                    `${srcDiv.style.transform} rotateY(-180deg)`,
-                    `${srcDiv.style.transform} rotateY(0deg)`,
-                ],
-            }, {
-                duration: ShortDuration,
-                easing: 'ease-out',
-                fill: 'forwards',
-            }).finished;
+            if (!this.instantaneousMode) {
+                // Flip the tile over first
+                await srcDiv.animate({
+                    transform: [
+                        `${srcDiv.style.transform} rotateY(-180deg)`,
+                        `${srcDiv.style.transform} rotateY(0deg)`,
+                    ],
+                }, {
+                    duration: ShortDuration,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
 
-            await srcDiv.animate({
-                transform: [
-                    `${srcDiv.style.transform} rotateY(0deg)`,
-                    `${srcDiv.style.transform} rotateY(0deg) rotateZ(${intermediateAngle}deg)`,
-                    `translate(${deltaX}px, ${deltaY}px) rotateY(0deg) rotateZ(0deg)`,
-                ],
-            }, {
-                duration: LongDuration,
-                easing: 'ease-out',
-                fill: 'forwards',
-            }).finished;
-
+                await srcDiv.animate({
+                    transform: [
+                        `${srcDiv.style.transform} rotateY(0deg)`,
+                        `${srcDiv.style.transform} rotateY(0deg) rotateZ(${intermediateAngle}deg)`,
+                        `translate(${deltaX}px, ${deltaY}px) rotateY(0deg) rotateZ(0deg)`,
+                    ],
+                }, {
+                    duration: LongDuration,
+                    easing: 'ease-out',
+                    fill: 'forwards',
+                }).finished;
+            }
+            
             // Show the new tile and delete the original
             destDiv.classList.remove('fled_hidden');
             srcDiv.parentElement.removeChild(srcDiv);
