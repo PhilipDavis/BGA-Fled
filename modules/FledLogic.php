@@ -3322,8 +3322,8 @@ class FledLogic
 
         // Scan the board for empty cells that are adjacent to already-placed tiles.
         $availableCells = [];
-        for ($x = 0; $x < 14; $x++) {
-            for ($y = 0; $y < 14; $y++) {
+        for ($x = 0; $x < FLED_WIDTH; $x++) {
+            for ($y = 0; $y < FLED_HEIGHT; $y++) {
                 $index = FledLogic::makeIndex($x, $y);
                 $tileId = $this->getTileAt($x, $y);
                 if ($tileId) continue;
@@ -3449,14 +3449,14 @@ class FledLogic
                 : [ FLED_TOOL_BOOT, FLED_TOOL_KEY ];
         
         // Temporarily place the tile at (x, y)
-        $board = clone $this->data->board;
+        $board = [ ...$this->data->board ];
         $this->setTileAt($tileId, $x, $y, $orientation);
 
         // Measure the traversals
         $traversals = $this->traverseAboveGround($items, $x, $y, 1, $this->countTilesOnBoard());
 
         // Remove the temporary tile
-        $this->data->board = clone $board;
+        $this->data->board = [ ...$board ];
 
         // Find the traversal that ends at the player's location
         // (should be one or zero paths)
@@ -3490,7 +3490,7 @@ class FledLogic
         // Note: this is not the optimal solution... but I've already spent
         // way too much time on this game. Will reuse existing functions.
         $items =
-            $npcName == FLED_TILE_SPECTER
+            $npcName === FLED_NPC_SPECTER
                 ? [ FLED_ECTOPLASM ]
                 : [ FLED_TOOL_BOOT, FLED_TOOL_KEY ];
 
@@ -3508,7 +3508,7 @@ class FledLogic
         if (count($pathsToPlayer) == 0)
             return PHP_INT_MIN; // No path to player
         $pathToPlayer = array_shift($pathsToPlayer);
-        return -count($pathToPlayer);
+        return -count($pathToPlayer['path']);
     }
 
     // Solo Mode
@@ -3539,7 +3539,7 @@ class FledLogic
         $x = $npc->pos[0];
         $y = $npc->pos[1];
 
-        $isSpecter = $npcName == FLED_TILE_SPECTER;
+        $isSpecter = $npcName == FLED_NPC_SPECTER;
 
         // Calculate all possible paths
         // Note: this is not the optimal solution... but I've already spent

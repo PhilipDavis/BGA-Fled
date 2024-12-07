@@ -1,62 +1,7 @@
 <?php declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
-use PHPUnit\Framework\Constraint\Callback;
-use PHPUnit\Framework\Constraint\Constraint;
 
 require_once('FledLogic.php');
-
-
-//
-// From https://github.com/sebastianbergmann/phpunit/issues/4026#issuecomment-1418205424
-// Thanks to https://github.com/dragosprotung
-//
-//use function array_column;
-//use function count;
-trait PHPUnitHelper
-{
-    /**
-     * @param array<mixed> $firstCallArguments
-     * @param array<mixed> ...$consecutiveCallsArguments
-     *
-     * @return iterable<Callback<mixed>>
-     */
-    public static function withConsecutive(array $firstCallArguments, array ...$consecutiveCallsArguments): iterable
-    {
-        foreach ($consecutiveCallsArguments as $consecutiveCallArguments) {
-            self::assertSameSize($firstCallArguments, $consecutiveCallArguments, 'Each expected arguments list need to have the same size.');
-        }
-
-        $allConsecutiveCallsArguments = [$firstCallArguments, ...$consecutiveCallsArguments];
-
-        $numberOfArguments = count($firstCallArguments);
-        $argumentList      = [];
-        for ($argumentPosition = 0; $argumentPosition < $numberOfArguments; $argumentPosition++) {
-            $argumentList[$argumentPosition] = array_column($allConsecutiveCallsArguments, $argumentPosition);
-        }
-
-        $mockedMethodCall = 0;
-        $callbackCall     = 0;
-        foreach ($argumentList as $index => $argument) {
-            yield new Callback(
-                static function (mixed $actualArgument) use ($argumentList, &$mockedMethodCall, &$callbackCall, $index, $numberOfArguments): bool {
-                    $expected = $argumentList[$index][$mockedMethodCall] ?? null;
-
-                    $callbackCall++;
-                    $mockedMethodCall = (int) ($callbackCall / $numberOfArguments);
-
-                    if ($expected instanceof Constraint) {
-                        self::assertThat($actualArgument, $expected);
-                    } else {
-                        self::assertEquals($expected, $actualArgument);
-                    }
-
-                    return true;
-                },
-            );
-        }
-    }
-}
-
 
 
 final class FledLogicTest extends TestCase
@@ -576,14 +521,19 @@ final class FledLogicTest extends TestCase
         $tileId = 30;
         $isSpecter = true;
 
-
-        $mockEvents->expects($this->exactly(2))->method('onSpecterMovedNpc')
-            ->with(
-                ...self::withConsecutive(
-                    [ true,  9, 6, 'warder1', [ [ 6, 6 ], [ 8, 6 ], [ 9, 6 ] ] ],
-                    [ false, 8, 6, 'specter', [ [ 7, 5 ], [ 8, 6 ] ] ],
-                )
-            );
+        $invokedCount = $this->exactly(2);
+        $mockEvents->expects($invokedCount)->method('onSpecterMovedNpc')
+            ->willReturnCallback(function (...$parameters) use ($invokedCount) {
+                switch ($invokedCount->numberOfInvocations())
+                {
+                    case 1:
+                        $this->assertSame(json_encode([ true,  9, 6, 'warder1', [ [ 6, 6 ], /*[ 8, 6 ],*/ [ 9, 6 ] ] ]), json_encode($parameters));
+                        break;
+                    case 2:
+                        $this->assertSame([ false, 8, 6, 'specter', [ [ 7, 5 ], [ 8, 6 ] ] ], $parameters);
+                        break;
+                }
+            });
 
         $fled->discardTile($tileId, $isSpecter);
 
@@ -644,6 +594,47 @@ final class FledLogicTest extends TestCase
 
         $mockEvents->expects($this->once())->method('onSpecterMovedNpc')
             ->with(false, 8, 6, 'warder1', [ [ 6, 6 ], [ 8, 6 ] ]);
+
+        $fled->discardTile($tileId, $isSpecter);
+
+        $this->assertTrue(true);
+    }
+
+    public function testSoloModeWarder3ShouldCatchPrisoner()
+    {
+        $mockEvents = $this->createMockEvents();
+        $fled = FledLogic::fromJson(
+            '{
+                "move":24,"npcs":{"specter":{"pos":[5,4]},"warder1":{"pos":[7,4]},"warder2":{"pos":[7,3]},"warder3":{"pos":[9,4]}},
+                "board":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,151,151,0,0,0,0,0,0,0,0,0,0,190,190,1,253,136,136,0,0,0,0,0,0,0,0,335,335,1,253,338,338,0,0,0,0,0,0,0,0,0,146,146,134,134,0,0,0,0,0,0,0,0,0,0,0,0,0,24,0,0,0,0,0,0,0,0,0,0,0,0,0,24,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                "order":[2393715],"setup":1,"options":{"houndExpansion":false,"specterExpansion":true},
+                "players":{
+                    "2393715":{"pos":[8,5],"hand":[13,9,49,3,11],"color":0,"escaped":false,"inventory":[],"needMove2":null,"inSolitary":false,"placedTile":true,"shackleTile":0,"actionsPlayed":0}
+                },
+                "version":1,"drawPile":[32,44,22,10,6,37,40,42,5,45,27,33,29,50,48,55,41,21,4,54,23,28],
+                "rollCall":[0,2,1,3,4],"hardLabor":0,"finalTurns":null,"nextPlayer":0,"openWindow":1,"whistlePos":3,"discardPile":[30,47,39,17,14],
+                "specterHand":[25,12],"spectersTurn":true,"governorInventory":[43,56,20,15,52,26,19,16,18]
+            }',
+            $mockEvents
+        );
+    
+        $playerId = 2393715;
+        $tileId = 25;
+        $isSpecter = true;
+
+        $invokedCount = $this->exactly(2);
+        $mockEvents->expects($invokedCount)->method('onSpecterMovedNpc')
+            ->willReturnCallback(function (...$parameters) use ($invokedCount) {
+                switch ($invokedCount->numberOfInvocations())
+                {
+                    case 1:
+                        $this->assertSame(json_encode([ true,  8, 5, 'warder3', [ [ 9, 4 ], /* ... */ [ 8, 5 ] ] ]), json_encode($parameters));
+                        break;
+                    case 2:
+                        $this->assertSame(json_encode([ false, 7, 4, 'specter', [ [ 5, 4 ], [ 7, 4 ] ] ]), json_encode($parameters));
+                        break;
+                }
+            });
 
         $fled->discardTile($tileId, $isSpecter);
 
