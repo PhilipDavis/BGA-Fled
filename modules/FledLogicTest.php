@@ -640,4 +640,34 @@ final class FledLogicTest extends TestCase
 
         $this->assertTrue(true);
     }
+
+    public function testDogCanMoveAboveUnderAbove()
+    {
+        // #150714 - Dog should be able to go up to 3 spaces with tunnel to tunnel counting as one. He should have been able to go to the washroom at the far right of the image through an open archway on both tiles
+
+        $mockEvents = $this->createMockEvents();
+        $fled = FledLogic::fromJson(
+            '{
+                "version":1,"move":66,"options":{"houndExpansion":true,"specterExpansion":false},"order":[2393715,2393716],"setup":1,
+                "npcs":{"hound":{"pos":[1,6]},"warder1":{"pos":[5,6]},"warder2":{"pos":[3,6]},"warder3":{"pos":[3,9]},"chaplain":{"pos":[7,8]}},
+                "board":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,322,322,0,0,0,0,0,0,0,0,0,0,0,119,119,310,310,102,102,146,146,0,0,0,0,0,0,114,114,345,345,139,139,201,231,30,0,0,0,0,0,0,0,154,154,140,140,201,231,30,0,0,0,0,0,0,0,36,51,0,226,9,25,0,0,0,0,0,0,0,0,36,51,0,226,9,25,0,0,0,0,0,0,0,0,217,213,0,0,0,0,0,0,0,0,0,0,0,0,217,213,0,0,0,0,0,0,0,0,0,0],
+                "players":{
+                    "2393715":{"pos":[6,9],"hand":[52,28,83,20],"color":0,"escaped":false,"inventory":[4,41],"needMove2":null,"inSolitary":false,"placedTile":true,"shackleTile":0,"actionsPlayed":0},
+                    "2393716":{"pos":[1,5],"hand":[42,56,34,21,55],"color":1,"escaped":false,"inventory":[33,48,11],"needMove2":null,"inSolitary":false,"placedTile":true,"shackleTile":6,"actionsPlayed":2}
+                },
+                "drawPile":[37,35,5,16,43,12,80,24],"rollCall":[0,1,2,3,4],"hardLabor":0,"finalTurns":null,"nextPlayer":0,"openWindow":0,"whistlePos":4,"discardPile":[23,81,3,82,27,32,44,53,85,49,47,84],"governorInventory":[38,15,29,18,50]
+            }',
+            $mockEvents
+        );
+    
+        $playerId = 2393715;
+        $tileId = 83;
+
+        $result = $fled->getLegalHoundMoves();
+
+        $destinations = array_map(fn($m) => array_pop($m['path']), $result);
+        $this->assertEquals(19, count($destinations));
+        $this->assertTrue(false !== array_search([ 5, 7 ], $destinations));
+        $this->assertTrue(false !== array_search([ 8, 7 ], $destinations));
+    }
 }

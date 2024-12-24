@@ -1463,6 +1463,7 @@ class FledLogic
     {
         $tileIdAndOrientation = $this->getTileAt($x, $y);
         $tileId = $tileIdAndOrientation % 100;
+        if ($tileId === 0) return null;
         $tile = FledLogic::$FledTiles[$tileId];
         $headPos = $this->getTileHeadPos($x, $y);
         $isHead = $headPos[0] == $x && $headPos[1] == $y;
@@ -2887,6 +2888,125 @@ class FledLogic
 
     //
     // Determine the set of possible paths starting at ($xStart, $yStart) that are
+    // between 0 and 3 steps away for the Hound.
+    //
+    public function traverseHound($xStart, $yStart) {
+        $minDistance = 0;
+        $maxDistance = 3;
+        $bestPathByIndex = [];
+        $traversals = [];
+        $visited = [];
+
+        // Collect all coordinates that have a room with a tunnel (to speed up algorithm)
+        $roomsWithTunnels = [];
+        foreach (range(1, FLED_WIDTH - 1) as $x)
+        {
+            foreach (range(1, FLED_HEIGHT - 1) as $y)
+            {
+                $room = $this->getRoomAt($x, $y);
+                if (!$this->roomHasTunnel($room))
+                    continue;
+                if (FledLogic::isDoubleTile($this->getTileAt($x, $y)))
+                    $roomsWithTunnels[] = $this->getTileHeadPos($x, $y);
+                else
+                    $roomsWithTunnels[] = [ $x, $y ];
+            }
+        }
+
+        // Start in the current room
+        $traversals[] = [
+            'path' => [
+                [ $xStart, $yStart ],
+            ],
+            'distance' => 0,
+            'type' => FLED_EMPTY,
+        ];
+
+        $directions = [
+            FLED_DIRECTION_NORTH => [  0, -1 ],
+            FLED_DIRECTION_EAST =>  [  1,  0 ],
+            FLED_DIRECTION_SOUTH => [  0,  1 ],
+            FLED_DIRECTION_WEST =>  [ -1,  0 ],
+        ];
+
+        while (count($traversals))
+        {
+            $traversal = array_shift($traversals);
+            $distance = $traversal['distance'];
+            $path = $traversal['path'];
+
+            $x = $path[count($path) - 1][0];
+            $y = $path[count($path) - 1][1];
+            $index = FledLogic::makeIndex($x, $y);
+            if (array_key_exists($index, $visited) && $visited[$index] <= $distance) continue;
+            $visited[$index] = $distance;
+
+            if ($distance >= $minDistance) {
+                $destination = [ $x, $y ];
+                $double = false;
+                $isHead = false;
+
+                // Is this tile a double tile? Add the head room only
+                // (unless it's already been added)
+                $tileId = $this->getTileAt($x, $y) % 100;
+                $rooms = FledLogic::$FledTiles[$tileId]['rooms'];
+                if ($rooms[0]['type'] === $rooms[1]['type'])
+                {
+                    $headPos = $this->getTileHeadPos($x, $y);
+                    $double = true;
+                    $isHead = $headPos[0] === $x && $headPos[1] === $y;
+                }
+
+                // Push single rooms and push the head room of double tiles
+                if (!$double || $isHead)
+                {
+                    $bestPathByIndex[$index] = [
+                        'path' => [ ...$path, $destination ],
+                        'type' => FLED_TOOL_SPOON,
+                    ];
+                }
+            }
+
+            // Check above-ground paths (through open archways)
+            foreach ($directions as $dir => $delta)
+            {
+                $dx = $delta[0];
+                $dy = $delta[1];
+                $thisRoomEgress = $this->getEgressType($x, $y, $dir);
+                $adjRoomEgress = $this->getEgressType($x + $dx, $y + $dy, ($dir + 2) % 4);
+                $traversalCost = $this->getTraversalCost($thisRoomEgress, $adjRoomEgress, FLED_TOOL_BOOT, $effectiveItem);
+                if ($distance + $traversalCost <= $maxDistance) {
+                    $traversals[] = [
+                        'distance' => $distance + $traversalCost,
+                        'path' => array_merge($path, [ [ $x + $dx, $y + $dy ] ]),
+                        'type' => $effectiveItem === FLED_EMPTY ? $traversal['type'] : $effectiveItem,
+                    ];
+                }
+            }
+
+            // Check below-ground paths (through tunnels)
+            if ($this->roomHasTunnel($this->getRoomAt($x, $y)) && $distance < $maxDistance)
+            {
+                // Add all other rooms with a tunnel
+                foreach ($roomsWithTunnels as $coords)
+                {
+                    if ($coords[0] != $x || $coords[1] != $y)
+                    {
+                        $traversals[] = [
+                            'distance' => $distance + 1, // Dog travels underground with cost 1 to any tunnel room
+                            'path' => array_merge($path, [ $coords ]),
+                            'type' => FLED_TOOL_SPOON,
+                        ];
+                    }
+                }
+            }
+        }
+
+        return array_values(array_map(fn($path) => $this->collapseDoubleTilesInTraversal($path, 'path'), $bestPathByIndex));
+    }
+
+    //
+    // Determine the set of possible paths starting at ($xStart, $yStart) that are
     // using the specified $items and can step through grid cells that have no tiles.
     // This is used for path planning NPCs in Solo Mode when determining the shortest
     // path to reach the player.
@@ -3642,10 +3762,7 @@ class FledLogic
         $pos = $this->data->npcs->hound->pos;
         $x = $pos[0];
         $y = $pos[1];
-        return [
-            ...$this->traverseAboveGround([ FLED_BONE ], $x, $y, 0, 3),
-            ...$this->traverseUnderGround($x, $y, FLED_WIDTH + FLED_HEIGHT),
-        ];
+        return $this->traverseHound($x, $y);
     }
 
     public function getLegalSpecterMoves()

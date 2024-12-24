@@ -1248,6 +1248,7 @@ define([], () => {
     }
 
     function isDoubleTile(tileId) {
+        tileId = tileId % 100;
         switch (tileId) {
             case SpecialTile.Chapel: return true;
             case SpecialTile.SolitaryConfinement: return true;
@@ -1887,6 +1888,142 @@ define([], () => {
             return Object.values(bestPathByIndex).map(t => this.collapseDoubleTilesInTraversal(t));
         }
 
+        getRoomsWithTunnels() {
+            const roomsWithTunnels = {};
+            for (let x = 1; x < FledWidth; x++) {
+                for (let y = 1; y < FledHeight; y++) {
+                    const room = this.getRoomAt(x, y);
+                    if (roomHasTunnel(room)) {
+                        if (isDoubleTile(this.getTileAt(x, y))) {
+                            const headPos = this.getTileHeadPos(x, y);
+                            const index = makeIndex(headPos.x, headPos.y);
+                            roomsWithTunnels[index] = [ headPos.x, headPos.y ];
+                        }
+                        else {
+                            const index = makeIndex(x, y);
+                            roomsWithTunnels[index] = [ x, y ];
+                        }
+                    }
+                }
+            }
+            return Object.values(roomsWithTunnels);
+        }
+
+        //
+        // Determine the set of possible paths starting at (xStart, yStart) that are
+        // between 0 and 3 steps away for the Hound.
+        //
+        traverseHound(xStart, yStart) {
+            const minDistance = 0;
+            const maxDistance = 3;
+            const bestPathByIndex = [];
+            const traversals = [];
+            const visited = [];
+
+            // Collect all coordinates that have a room with a tunnel (to speed up algorithm)
+            const roomsWithTunnels = this.getRoomsWithTunnels();
+
+            // Start in the current room
+            traversals.push({
+                path: [
+                    [ xStart, yStart ],
+                ],
+                distance: 0,
+                type: Empty,
+            });
+
+            const directions = {
+                [Direction.North]: [  0, -1 ],
+                [Direction.East]:  [  1,  0 ],
+                [Direction.South]: [  0,  1 ],
+                [Direction.West]:  [ -1,  0 ],
+            };
+
+            while (traversals.length) {
+                const traversal = traversals.shift();
+                const { distance, path, type } = traversal;
+
+                const [ x, y ] = path[path.length - 1];
+                const index = makeIndex(x, y);
+                if (visited[index] <= distance) continue;
+                visited[index] = distance;
+
+                if (distance >= minDistance) {
+                    let double;
+                    let isHead = false;
+
+                    // Is this tile a double tile? Add the head room only
+                    // (unless it's already been added)
+                    const { tileId } = unpackCell(this.getTileAt(x, y));
+                    if (isDoubleTile(tileId)) {
+                        const headPos = this.getTileHeadPos(x, y);
+                        path.pop();
+                        path.push([ headPos.x, headPos.y ]);
+                        double = true;
+                        isHead = headPos.x === x && headPos.y === y;
+                    }
+
+                    if (!double || isHead) {
+                        bestPathByIndex[index] = {
+                            tunnel: false,
+                            path,
+                            distance,
+                        };
+                    }
+                }
+
+                // Check above-ground paths (through open archways)
+                for (const [ dirString, delta ] of Object.entries(directions)) {
+                    const dir = Number(dirString);
+                    const dx = delta[0];
+                    const dy = delta[1];
+                    const thisRoomEgress = this.getEgressType(x, y, dir);
+                    const adjRoomEgress = this.getEgressType(x + dx, y + dy, (dir + 2) % 4);
+                    const traversalCost = this.getTraversalCost(thisRoomEgress, adjRoomEgress, ItemType.Boot);
+                    if (distance + traversalCost <= maxDistance) {
+                        traversals.push({
+                            distance: distance + traversalCost,
+                            path: [ ...path, [ x + dx, y + dy ] ],
+                            type: ItemType.Boot,
+                        });
+                    }
+                }
+
+                // Check below-ground paths (through tunnels)
+                if (roomHasTunnel(this.getRoomAt(x, y)) && distance < maxDistance) {
+                    // Add all other rooms with a tunnel
+                    for (const coords of roomsWithTunnels) {
+                        if (coords[0] !== x || coords[1] !== y) {
+                            traversals.push({
+                                distance: distance + 1, // Dog travels underground with cost 1 to any tunnel room
+                                path: [ ...path, coords ],
+                                type: ToolType.Spoon,
+                            });
+                        }
+                    }
+
+                    // Check for double tiles
+                    for (const [ dirString, delta ] of Object.entries(directions)) {
+                        const dir = Number(dirString);
+                        const dx = delta[0];
+                        const dy = delta[1];
+                        const thisRoomEgress = this.getEgressType(x, y, dir);
+                        const adjRoomEgress = this.getEgressType(x + dx, y + dy, (dir + 2) % 4);
+                        const traversalCost = this.getTraversalCost(thisRoomEgress, adjRoomEgress, Empty);
+                        if (traversalCost === 0) {
+                            traversals.push({
+                                distance: distance + traversalCost,
+                                path: [ ...path, [ x + dx, y + dy ] ],
+                                type: Empty,
+                            });
+                        }
+                    }
+                }
+            }
+
+            return Object.values(bestPathByIndex).map(t => this.collapseDoubleTilesInTraversal(t));
+        }
+
         collapseDoubleTilesInTraversal(traversal) {
             const { path } = traversal;
             for (let i = path.length - 1; i > 0; i--) {
@@ -2320,10 +2457,7 @@ define([], () => {
             const { hound } = this.data.npcs
             if (!hound) return [];
             const [ x, y ] = hound.pos;
-            return [
-                ...this.traverseAboveGround([ ItemType.Bone ], x, y, 0, 3),
-                ...this.traverseUnderGround(x, y, FledWidth + FledHeight),
-            ];
+            return this.traverseHound(x, y);
         }
 
         getLegalSpecterMoves() {
