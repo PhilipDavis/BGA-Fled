@@ -1594,6 +1594,10 @@ class FledLogic
 
     public function isTileInSpecterHand($tileId)
     {
+        if (!$this->getOption('specterExpansion'))
+            return false;
+        if (!isset($this->data->specterHand))
+            return false;
         return array_search($tileId, $this->data->specterHand) !== false;
     }
 
@@ -1723,7 +1727,7 @@ class FledLogic
         if (!$this->isLegalTilePlacement($tileId, $x, $y, $orientation, $isBunkTile))
             throw new Exception('Illegal tile placement');
 
-        $isSpecter = $this->getOption('specterExpansion') && $this->isTileInSpecterHand($tileId);
+        $isSpecter = $this->isTileInSpecterHand($tileId);
         if ($isSpecter)
             $this->removeTileFromSpecterHand($tileId);
         else
