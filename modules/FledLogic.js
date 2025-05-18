@@ -1301,7 +1301,7 @@ define([], () => {
         // into the correct position.
         //
         parseBoard() {
-            this.rooms = new Array(FledWidth * FledHeight).map(_ => null);
+            this.rooms = [ ...new Array(FledWidth * FledHeight) ].map(_ => null);
             for (let x = 0; x < FledWidth; x++) {
                 for (let y = 0; y < FledHeight; y++) {
                     const tileIdAndOrientation = this.getTileAt(x, y);
@@ -2381,6 +2381,7 @@ define([], () => {
             
             // Temporarily place the tile at (x, y)
             const board = [ ...this.data.board ];
+            const rooms = [ ...this.data.rooms ];
             this.setTileAt(tileId, x, y, orientation);
 
             // Measure the traversals
@@ -2388,6 +2389,7 @@ define([], () => {
 
             // Remove the temporary tile
             this.data.board = board;
+            this.data.rooms = rooms;
 
             // Find the traversal that ends at the player's location
             // (should be one or zero paths)
