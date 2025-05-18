@@ -670,4 +670,38 @@ final class FledLogicTest extends TestCase
         $this->assertTrue(false !== array_search([ 5, 7 ], $destinations));
         $this->assertTrue(false !== array_search([ 8, 7 ], $destinations));
     }
+
+    public function test158728_IllegalSpecterMove()
+    {
+        $mockEvents = $this->createMockEvents();
+        $fled = FledLogic::fromJson(
+            '{
+                "move":39,
+                "npcs":{
+                    "warder1":{"pos":[3,5]},
+                    "warder2":{"pos":[6,4]},
+                    "specter":{"pos":[2,2]}
+                },
+                "board":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,190,190,0,0,0,0,0,0,0,0,0,0,119,119,28,29,0,0,0,0,0,0,0,0,0,0,115,115,28,29,230,0,136,136,0,0,0,0,0,0,0,0,112,112,230,234,124,124,126,126,0,0,0,0,0,0,0,0,0,234,146,146,0,43,0,0,0,0,0,0,0,0,0,102,102,141,141,43,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                "order":[94570407],"setup":true,
+                "options":{"houndExpansion":false,"specterExpansion":true},
+                "players":{
+                    "94570407":{
+                        "pos":[2,3],"hand":[25,18,50,52],"color":1,"escaped":false,"inventory":[4,11],"needMove2":null,
+                        "inSolitary":false,"placedTile":false,"shackleTile":21,"actionsPlayed":0,"addedTile":true
+                    }
+                },
+                "version":1,"drawPile":[],"rollCall":[1,0,3,2,4],"hardLabor":0,"finalTurns":null,
+                "nextPlayer":0,"openWindow":2,"whistlePos":2,"discardPile":[],
+                "specterHand":[],"spectersTurn":false,
+                "governorInventory":[44,39,9,3,23,56,40,10,54],"moves":null
+            }',
+            $mockEvents
+        );
+
+        $result = $fled->getLegalSpecterMoves();
+
+        $destinations = array_map(fn($m) => array_pop($m['path']), $result);
+        $this->assertEquals([[2,3]], $destinations);
+    }
 }

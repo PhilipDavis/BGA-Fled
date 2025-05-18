@@ -2890,7 +2890,24 @@ class FledLogic
             }
         }
 
-        return array_values(array_map(fn($path) => $this->collapseDoubleTilesInTraversal($path, 'path'), $bestPathByIndex));
+        $traversals = array_values(array_map(fn($path) => $this->collapseDoubleTilesInTraversal($path, 'path'), $bestPathByIndex));
+        return $this->removeDuplicateTraversals($traversals);
+    }
+
+    private function removeDuplicateTraversals($traversals)
+    {
+        $seen = [];
+        $result = [];
+        foreach ($traversals as $t)
+        {
+            $key = json_encode($t['path']);
+            if (!key_exists($key, $seen))
+            {
+                $seen[$key] = true;
+                $result[] = $t;
+            }
+        }
+        return $result;
     }
 
     //
@@ -3772,6 +3789,16 @@ class FledLogic
         return $this->traverseHound($x, $y);
     }
 
+    private function calcluateTraversalThreatToPlayer($traversal)
+    {
+        $playerId = $this->getNextPlayerId();
+        $pos = $this->data->players->$playerId->pos;
+
+        $path = $traversal['path'];
+        $destination = $path[count($path) - 1];
+        return FLED_WIDTH + FLED_HEIGHT - abs($destination[0] - $pos[0]) - abs($destination[1] - $pos[1]);
+    }
+
     public function getLegalSpecterMoves()
     {
         if (!isset($this->data->npcs->specter))
@@ -3779,7 +3806,12 @@ class FledLogic
         $pos = $this->data->npcs->specter->pos;
         $x = $pos[0];
         $y = $pos[1];
-        return $this->traverseAboveGround([ FLED_ECTOPLASM ], $x, $y, 0, 1);
+        $traversals = $this->traverseAboveGround([ FLED_ECTOPLASM ], $x, $y, 0, 1);
+
+        // For now, just use naive distance to player. i.e. don't reroute ghost along
+        // a longer path just because tiles are missing in the more-direct path.
+        $maxThreat = array_reduce($traversals, fn($threat, $t) => max($threat, $this->calcluateTraversalThreatToPlayer($t)), 0);
+        return array_values(array_filter($traversals, fn($t) => $this->calcluateTraversalThreatToPlayer($t) === $maxThreat));
     }
 
     public function canPlayerEscape($playerId)

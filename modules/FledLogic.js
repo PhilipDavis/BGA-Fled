@@ -2466,7 +2466,16 @@ define([], () => {
             const { specter } = this.data.npcs
             if (!specter) return [];
             const [ x, y ] = specter.pos;
-            return this.traverseAboveGround([ ItemType.Ectoplasm ], x, y, 0, 1);
+            const traversals = this.traverseAboveGround([ ItemType.Ectoplasm ], x, y, 0, 1);
+            const maxThreat = traversals.reduce((threat, t) => Math.max(threat, this.calculateTraversalThreatToPlayer(t)), 0);
+            return traversals.filter(t => this.calculateTraversalThreatToPlayer(t) === maxThreat);
+        }
+
+        calculateTraversalThreatToPlayer(t) {
+            const [ x, y ] = this.data.players[this.myPlayerId].pos; // (used in solo mode only)
+            const { path } = t;
+            const [ destX, destY ] = path[path.length - 1];
+            return FledWidth + FledHeight - Math.abs(destX - x) - Math.abs(destY - y);
         }
 
         getLegalSpecterSurrenders() {
