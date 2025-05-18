@@ -69,7 +69,7 @@ define([], () => {
 
         // Note: This is not a real thing in the game.
         // I'm using it in traversal algorithms to define
-        // the allowable movement of the Spector NPC
+        // the allowable movement of the Specter NPC
         Ectoplasm: 99,
     };
 

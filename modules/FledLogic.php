@@ -1247,6 +1247,9 @@ class FledLogic
         $playerIds = array_keys($playerColors);
         $playerCount = count($playerColors);
 
+        if ($playerCount == 1 && !$options['specterExpansion'])
+            throw new Exception("Must have Specter Expansion for solo game");
+
         $starterTileIds = [
             FLED_TILE_YELLOW_BUNK,
             FLED_TILE_BLUE_BUNK,
@@ -1361,7 +1364,7 @@ class FledLogic
             //'spectersTurn' => false, // Only exists in the solo game
         ];
 
-        if ($playerCount == 1)
+        if ($options['specterExpansion'] && $playerCount == 1)
         {
             $data->specterHand = [];
             $data->spectersTurn = false;
