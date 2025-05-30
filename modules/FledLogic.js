@@ -2381,7 +2381,7 @@ define([], () => {
             
             // Temporarily place the tile at (x, y)
             const board = [ ...this.data.board ];
-            const rooms = [ ...this.data.rooms ];
+            const rooms = [ ...this.rooms ];
             this.setTileAt(tileId, x, y, orientation);
 
             // Measure the traversals
@@ -2389,7 +2389,7 @@ define([], () => {
 
             // Remove the temporary tile
             this.data.board = board;
-            this.data.rooms = rooms;
+            this.rooms = rooms;
 
             // Find the traversal that ends at the player's location
             // (should be one or zero paths)
