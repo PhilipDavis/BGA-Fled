@@ -2467,8 +2467,13 @@ define([], () => {
             if (!specter) return [];
             const [ x, y ] = specter.pos;
             const traversals = this.traverseAboveGround([ ItemType.Ectoplasm ], x, y, 0, 1);
-            const maxThreat = traversals.reduce((threat, t) => Math.max(threat, this.calculateTraversalThreatToPlayer(t)), 0);
-            return traversals.filter(t => this.calculateTraversalThreatToPlayer(t) === maxThreat);
+            if (this.isSoloGame) {
+                const maxThreat = traversals.reduce((threat, t) => Math.max(threat, this.calculateTraversalThreatToPlayer(t)), 0);
+                return traversals.filter(t => this.calculateTraversalThreatToPlayer(t) === maxThreat);
+            }
+            else {
+                return traversals;
+            }
         }
 
         calculateTraversalThreatToPlayer(t) {
